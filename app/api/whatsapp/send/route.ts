@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { sendBillAndReviewTemplate } from '@/lib/whatsapp/client';
-import { formatCurrency } from '@/lib/calculations/billing';
 
 const CREDIT_COST_PER_MESSAGE = 1;
 
@@ -43,7 +42,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Send WhatsApp template
-    const billDisplay = formatCurrency(total_amount);
+    // Template body already contains "₹{{3}}", so pass the plain number only.
+    const billDisplay = String(Math.round(total_amount * 100) / 100).replace(/\.00$/, '');
     await sendBillAndReviewTemplate(
       customer_phone,
       billDisplay,

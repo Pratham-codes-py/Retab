@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { calculateTotal, formatCurrency, BillLineItem } from '@/lib/calculations/billing';
+import { normalizePhoneNumber } from '@/lib/utils/phone';
 
 export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItems: any[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,13 +30,19 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
 
     setIsSubmitting(true);
     try {
+      const normalizedPhone = normalizePhoneNumber(customerPhone);
+      if (!normalizedPhone) {
+        alert('Invalid phone number.');
+        return;
+      }
+
       // 1. Create order and save items in DB
       const orderRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cafe_id: cafe.id,
-          customer_phone: customerPhone.trim(),
+          customer_phone: normalizedPhone,
           customer_name: customerName.trim() || undefined,
           items: orderItems,
         }),
@@ -57,7 +64,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
           cafe_id: cafe.id,
           customer_id: createdOrder.customer_id,
           customer_name: customerName.trim() || undefined,
-          customer_phone: customerPhone.trim(),
+          customer_phone: normalizedPhone,
           order_id: createdOrder.id,
           total_amount: createdOrder.total_amount,
         }),
