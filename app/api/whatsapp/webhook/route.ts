@@ -50,10 +50,49 @@ export async function POST(request: NextRequest) {
     const from: string = message.from; // sender phone in E.164
     const messageType: string = message.type;
 
-    // TODO: implement the full review flow
-    // - 'interactive' button tap → record review rating in DB
-    // - 'text' reply → store as feedback_text
-    // - redirect high ratings (4–5) to google_review_link
+    if (messageType === 'interactive') {
+      const buttonReply = message.interactive?.button_reply;
+      const title: string = buttonReply?.title ?? '';
+
+      // Map button title → numeric rating stored in DB
+      // Buttons: "Amazing!" (positive=5), "It was okay" (neutral=3), "Could be better" (negative=1)
+      let rating: number | null = null;
+      if (title === 'Amazing!') rating = 5;
+      else if (title === 'It was okay') rating = 3;
+      else if (title === 'Could be better') rating = 1;
+
+      if (rating !== null) {
+        const supabase = createServiceRoleClient();
+
+        // Look up the customer by phone to find the most recent order
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('phone', from)
+          .single();
+
+        if (customer) {
+          const { data: order } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('customer_id', customer.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (order) {
+            await supabase.from('reviews').insert({
+              customer_id: customer.id,
+              order_id: order.id,
+              rating,
+              channel: 'whatsapp',
+            });
+          }
+        }
+
+        console.log(`[whatsapp/webhook] Review recorded: "${title}" (rating ${rating}) from ${from}`);
+      }
+    }
 
     console.log(`[whatsapp/webhook] Message from ${from}, type: ${messageType}`);
 

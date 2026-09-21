@@ -154,13 +154,13 @@ export default function ReviewsPage() {
     
     const subtext = `${table} • ${dateStr} ${source}`;
     
-    let badge = 'OKAY';
+    let badge = 'IT WAS OKAY';
     let badgeStyle = 'neutral';
     if (r.rating >= 4) {
-      badge = 'LOVED IT';
+      badge = 'AMAZING!';
       badgeStyle = 'positive';
     } else if (r.rating <= 2) {
-      badge = 'NEEDS IMPROVEMENT';
+      badge = 'COULD BE BETTER';
       badgeStyle = 'negative';
     }
     
@@ -242,7 +242,7 @@ export default function ReviewsPage() {
               className={filter === f ? "btn-solid" : "btn-outline"}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}
             >
-              {f === 'all' ? 'All Reviews' : f === 'positive' ? 'Loved It' : f === 'neutral' ? 'Okay' : 'Needs Work'}
+              {f === 'all' ? 'All Reviews' : f === 'positive' ? 'Amazing!' : f === 'neutral' ? 'It was okay' : 'Could be better'}
             </button>
           ))}
           <button className="btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -385,7 +385,7 @@ export default function ReviewsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }} />
-                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Loved it</span>
+                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Amazing!</span>
               </div>
               <span style={{ fontSize: '14px', fontWeight: 700, color: T.onSurface }}>{positiveCount}</span>
             </div>
@@ -393,7 +393,7 @@ export default function ReviewsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
-                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Okay</span>
+                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>It was okay</span>
               </div>
               <span style={{ fontSize: '14px', fontWeight: 700, color: T.onSurface }}>{neutralCount}</span>
             </div>
@@ -401,7 +401,7 @@ export default function ReviewsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: T.primary }} />
-                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Needs Work</span>
+                <span style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Could be better</span>
               </div>
               <span style={{ fontSize: '14px', fontWeight: 700, color: T.onSurface }}>{criticalCount}</span>
             </div>

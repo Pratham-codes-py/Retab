@@ -56,6 +56,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
         body: JSON.stringify({
           cafe_id: cafe.id,
           customer_id: createdOrder.customer_id,
+          customer_name: customerName.trim() || undefined,
           customer_phone: customerPhone.trim(),
           order_id: createdOrder.id,
           total_amount: createdOrder.total_amount,

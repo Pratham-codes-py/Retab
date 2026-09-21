@@ -1,14 +1,26 @@
 /**
  * Retab — Meta WhatsApp Cloud API wrapper
  *
- * Wraps the Meta Graph API v19.0 Messages endpoint.
+ * Wraps the Meta Graph API v25.0 Messages endpoint.
  * All functions run server-side only (used in app/api/whatsapp/send/route.ts).
  *
  * Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages
  */
 
-const GRAPH_API_VERSION = 'v19.0';
+const GRAPH_API_VERSION = 'v25.0';
 const BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+
+// Startup check — log token presence server-side only
+if (typeof window === 'undefined') {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!token) {
+    console.error('[whatsapp/client] WHATSAPP_ACCESS_TOKEN is missing');
+  } else if (token.length < 50) {
+    console.warn(`[whatsapp/client] WHATSAPP_ACCESS_TOKEN present but suspiciously short (${token.length} chars)`);
+  } else {
+    console.log(`[whatsapp/client] WHATSAPP_ACCESS_TOKEN present (${token.length} chars)`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,25 +114,32 @@ export async function sendTemplateMessage(
 /**
  * Sends the combined "bill and review request" template to a customer.
  *
+ * Template: order_review_request (registered in Meta Business Manager, Utility category)
+ * Body variables (in order): {{1}} customerName, {{2}} cafeName, {{3}} billTotal
+ * Button variable: {{1}} googleReviewUrl (url button, index 0)
+ *
  * @param to              - Customer phone in E.164 format
  * @param billTotal       - Formatted bill total string, e.g. "₹245.00"
  * @param cafeName        - Cafe name shown in the template
  * @param googleReviewUrl - Deep link to the Google review form
+ * @param customerName    - Customer name shown in the greeting (optional, falls back to "Customer")
  */
 export async function sendBillAndReviewTemplate(
   to: string,
   billTotal: string,
   cafeName: string,
-  googleReviewUrl: string
+  googleReviewUrl: string,
+  customerName: string = 'Customer'
 ): Promise<WhatsAppMessageResponse> {
   return sendTemplateMessage({
     to,
-    templateName: 'retab_bill_review', // register this template in Meta Business Manager
-    languageCode: 'en',
+    templateName: 'order_review_request',
+    languageCode: 'en_US',
     components: [
       {
         type: 'body',
         parameters: [
+          { type: 'text', text: customerName },
           { type: 'text', text: cafeName },
           { type: 'text', text: billTotal },
         ],

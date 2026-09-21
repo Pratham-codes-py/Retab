@@ -12,9 +12,10 @@ const CREDIT_COST_PER_MESSAGE = 1;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cafe_id, customer_id, customer_phone, order_id, total_amount } = body as {
+    const { cafe_id, customer_id, customer_name, customer_phone, order_id, total_amount } = body as {
       cafe_id: string;
       customer_id: string;
+      customer_name?: string;
       customer_phone: string;
       order_id: string;
       total_amount: number;
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
       customer_phone,
       billDisplay,
       cafe.name,
-      cafe.google_review_link ?? ''
+      cafe.google_review_link ?? '',
+      customer_name
     );
 
     // 3. Deduct credits atomically
