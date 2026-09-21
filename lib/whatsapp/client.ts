@@ -128,7 +128,7 @@ export async function sendBillAndReviewTemplate(
   to: string,
   billTotal: string,
   cafeName: string,
-  googleReviewUrl: string,
+  googleReviewUrl: string, // kept for call-site compatibility; template buttons are static
   customerName: string = 'Customer'
 ): Promise<WhatsAppMessageResponse> {
   return sendTemplateMessage({
@@ -143,12 +143,6 @@ export async function sendBillAndReviewTemplate(
           { type: 'text', text: cafeName },
           { type: 'text', text: billTotal },
         ],
-      },
-      {
-        type: 'button',
-        sub_type: 'url',
-        index: 0,
-        parameters: [{ type: 'text', text: googleReviewUrl }],
       },
     ],
   });
