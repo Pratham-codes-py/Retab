@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { getActiveCafe } from '@/lib/active-cafe';

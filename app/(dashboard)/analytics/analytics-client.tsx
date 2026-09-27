@@ -26,12 +26,13 @@ const T = {
   success: '#059669', // Green for positive trends
 } as const;
 
-export default function AnalyticsClient() {
-  const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export default function AnalyticsClient({ initialData }: { initialData?: any }) {
+  const [data, setData] = useState<any>(initialData || null);
+  const [isLoading, setIsLoading] = useState(false);
   const [period, setPeriod] = useState<'30' | '90' | '180'>('30');
 
   useEffect(() => {
+    if (!initialData) return;
     async function fetchAnalytics() {
       setIsLoading(true);
       try {
@@ -40,7 +41,7 @@ export default function AnalyticsClient() {
         start.setDate(start.getDate() - days);
         const startStr = start.toISOString().split('T')[0];
         const endStr = new Date().toISOString().split('T')[0];
-        
+
         const res = await fetch(`/api/analytics?start_date=${startStr}&end_date=${endStr}`);
         const json = await res.json();
         if (res.ok) {
@@ -55,7 +56,7 @@ export default function AnalyticsClient() {
     fetchAnalytics();
   }, [period]);
 
-  const formatCurrency = (val: number) => `₹${(val / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  const formatCurrency = (val: number) => `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Data Mapping for UI

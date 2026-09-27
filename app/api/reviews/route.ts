@@ -49,10 +49,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const serviceRoleSupabase = createServiceRoleClient();
+
+    // Get all order IDs for this cafe
+    const { data: cafeOrders } = await serviceRoleSupabase
+      .from('orders')
+      .select('id')
+      .eq('cafe_id', cafe.id);
+
+    const orderIds = (cafeOrders || []).map(o => o.id);
+
+    if (orderIds.length === 0) {
+      return NextResponse.json({ reviews: [] });
+    }
+
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('rating'); // e.g. positive, critical, neutral
 
-    const serviceRoleSupabase = createServiceRoleClient();
     let query = serviceRoleSupabase
       .from('reviews')
       .select(`
@@ -63,9 +76,9 @@ export async function GET(request: NextRequest) {
         is_resolved,
         created_at,
         customer:customers(id, name),
-        orders!inner(id, cafe_id, table_number, source)
+        orders(id, table_number, source)
       `)
-      .eq('orders.cafe_id', cafe.id);
+      .in('order_id', orderIds);
 
     if (filter === 'positive' || filter === 'loved_it') {
       query = query.gte('rating', 4);

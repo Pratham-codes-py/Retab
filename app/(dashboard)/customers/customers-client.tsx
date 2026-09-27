@@ -18,6 +18,12 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBySpend, setSortBySpend] = useState(false);
 
+  // New This Month: first_visit >= start of current calendar month (IST)
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(Date.now() + IST_OFFSET_MS);
+  const monthStartIST = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), 1) - IST_OFFSET_MS);
+  const newThisMonth = initialCustomers.filter(c => new Date(c.first_visit) >= monthStartIST).length;
+
   // Filter and Sort
   let displayedCustomers = initialCustomers.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -77,7 +83,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
           </div>
           <div>
             <h4 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" style={{ fontSize: '12px', color: '#55423e', fontWeight: 600, letterSpacing: '0.05em' }}>New This Month</h4>
-            <p className="font-pos-price text-pos-price text-on-surface" style={{ fontSize: '28px', fontWeight: 700 }}>148</p>
+            <p className="font-pos-price text-pos-price text-on-surface" style={{ fontSize: '28px', fontWeight: 700 }}>{newThisMonth}</p>
           </div>
         </div>
         

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { subDays, format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { subDays, format, parseISO } from 'date-fns';
 import { getActiveCafe } from '@/lib/active-cafe';
 
 export async function GET(request: NextRequest) {
@@ -13,33 +13,50 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve active cafe
-    const { cafe, isOwner } = await getActiveCafe();
+    const { cafe } = await getActiveCafe();
 
-    if (!cafe || !isOwner) {
-      return NextResponse.json({ error: 'Cafe not found or unauthorized' }, { status: 404 });
+    if (!cafe) {
+      return NextResponse.json({ error: 'Cafe not found' }, { status: 404 });
     }
 
 
-    // Parse date query params
+    // Parse date query params with IST timezone
     const { searchParams } = new URL(request.url);
     const startDateParam = searchParams.get('start_date');
     const endDateParam = searchParams.get('end_date');
 
-    const today = new Date();
-    const defaultStartDate = subDays(today, 30);
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const now = new Date();
+    const defaultStartDate = subDays(now, 30);
 
-    const startDate = startDateParam ? startOfDay(parseISO(startDateParam)).toISOString() : startOfDay(defaultStartDate).toISOString();
-    const endDate = endDateParam ? endOfDay(parseISO(endDateParam)).toISOString() : endOfDay(today).toISOString();
+    // IST-aware day boundaries
+    const getISTDayStart = (date: Date) => {
+      const istDate = new Date(date.getTime() + IST_OFFSET_MS);
+      return new Date(Date.UTC(istDate.getUTCFullYear(), istDate.getUTCMonth(), istDate.getUTCDate()) - IST_OFFSET_MS);
+    };
+    const getISTDayEnd = (date: Date) => {
+      const start = getISTDayStart(date);
+      return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+    };
+
+    const startDate = startDateParam ? getISTDayStart(parseISO(startDateParam)).toISOString() : getISTDayStart(defaultStartDate).toISOString();
+    const endDate = endDateParam ? getISTDayEnd(parseISO(endDateParam)).toISOString() : getISTDayEnd(now).toISOString();
 
     const serviceRoleSupabase = createServiceRoleClient();
 
     // 1. Fetch Orders for Revenue Trend, Day of Week, and Customer Split
     const { data: orders, error: ordersError } = await serviceRoleSupabase
       .from('orders')
-      .select('created_at, total_amount, customer_id, created_by, customers(first_visit)')
+      .select('id, created_at, total_amount, customer_id, created_by, customers(first_visit)')
       .eq('cafe_id', cafe.id)
       .gte('created_at', startDate)
       .lte('created_at', endDate);
+
+    if (ordersError) {
+      return NextResponse.json({ error: ordersError.message }, { status: 500 });
+    }
+
+    const orderIds = (orders || []).map(o => o.id);
 
     // Fetch staff members to map user_id -> name for staff performance
     const { data: staffMembers } = await serviceRoleSupabase
@@ -48,32 +65,32 @@ export async function GET(request: NextRequest) {
       .eq('cafe_id', cafe.id)
       .in('role', ['manager', 'staff']);
 
-    if (ordersError) {
-      return NextResponse.json({ error: ordersError.message }, { status: 500 });
+    // 2. Fetch Order Items for Best-selling Items (filter by order IDs)
+    let orderItems: any[] = [];
+    if (orderIds.length > 0) {
+      const { data, error: itemsError } = await serviceRoleSupabase
+        .from('order_items')
+        .select('quantity, menu_items(name, price)')
+        .in('order_id', orderIds);
+
+      if (itemsError) {
+        return NextResponse.json({ error: itemsError.message }, { status: 500 });
+      }
+      orderItems = data || [];
     }
 
-    // 2. Fetch Order Items for Best-selling Items
-    const { data: orderItems, error: itemsError } = await serviceRoleSupabase
-      .from('order_items')
-      .select('quantity, price, menu_items!inner(name, cafe_id), orders!inner(created_at, cafe_id)')
-      .eq('orders.cafe_id', cafe.id)
-      .gte('orders.created_at', startDate)
-      .lte('orders.created_at', endDate);
+    // 3. Fetch Reviews for Rating Breakdown (filter by order IDs)
+    let reviews: any[] = [];
+    if (orderIds.length > 0) {
+      const { data, error: reviewsError } = await serviceRoleSupabase
+        .from('reviews')
+        .select('rating')
+        .in('order_id', orderIds);
 
-    if (itemsError) {
-      return NextResponse.json({ error: itemsError.message }, { status: 500 });
-    }
-
-    // 3. Fetch Reviews for Rating Breakdown
-    const { data: reviews, error: reviewsError } = await serviceRoleSupabase
-      .from('reviews')
-      .select('rating, orders!inner(cafe_id, created_at)')
-      .eq('orders.cafe_id', cafe.id)
-      .gte('orders.created_at', startDate)
-      .lte('orders.created_at', endDate);
-
-    if (reviewsError) {
-      return NextResponse.json({ error: reviewsError.message }, { status: 500 });
+      if (reviewsError) {
+        return NextResponse.json({ error: reviewsError.message }, { status: 500 });
+      }
+      reviews = data || [];
     }
 
     // 4. Fetch Top Regulars
@@ -118,11 +135,12 @@ export async function GET(request: NextRequest) {
     const itemMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
     orderItems?.forEach((item: any) => {
       const name = item.menu_items?.name || 'Unknown Item';
+      const price = item.menu_items?.price || 0;
       if (!itemMap[name]) {
         itemMap[name] = { name, quantity: 0, revenue: 0 };
       }
       itemMap[name].quantity += item.quantity || 0;
-      itemMap[name].revenue += (item.quantity || 0) * (item.price || 0);
+      itemMap[name].revenue += (item.quantity || 0) * price;
     });
 
     const bestSellers = Object.values(itemMap)

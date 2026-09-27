@@ -11,9 +11,10 @@
  *  4. Recent Activity feed (table)
  */
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 import Link from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { getActiveCafe } from '@/lib/active-cafe';
 import { redirect } from 'next/navigation';
@@ -52,13 +53,12 @@ const planLimits: Record<string, number> = {
   pro: 1000,
 };
 
-function formatRupees(amountInPaise: number): string {
-  const rupees = amountInPaise / 100;
+function formatRupees(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(rupees);
+  }).format(amount);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,28 +184,44 @@ export default async function DashboardPage() {
   // Load Stats & Data from Supabase
   // ---------------------------------------------------------------------------
   const now = new Date();
-  
-  // Today's boundaries (local timezone start of day)
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
 
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  // Today's boundaries in IST (UTC+5:30). Vercel runs UTC, so we cannot
+  // use setHours(0,0,0,0) — that would zero UTC midnight, not IST midnight.
+  // IST never observes DST, so the offset is always exactly +330 minutes.
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(now.getTime() + IST_OFFSET_MS);
+
+  // Midnight IST today, expressed as a UTC timestamp
+  const todayStart = new Date(
+    Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate())
+    - IST_OFFSET_MS
+  );
+
+  const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
   const yesterdayEnd = todayStart;
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // 1. Today's and Yesterday's orders for Revenue / Bills count
-  const { data: todayOrders } = cafeId ? await supabase
-    .from('orders')
-    .select('total_amount')
-    .eq('cafe_id', cafeId)
-    .gte('created_at', todayStart.toISOString()) : { data: [] };
-
-  const { data: yesterdayOrders } = cafeId ? await supabase
-    .from('orders')
-    .select('total_amount')
-    .eq('cafe_id', cafeId)
-    .gte('created_at', yesterdayStart.toISOString())
-    .lt('created_at', yesterdayEnd.toISOString()) : { data: [] };
+  // Parallel independent queries
+  const [
+    { data: todayOrders },
+    { data: yesterdayOrders },
+    { data: todayCustomers },
+    { data: cafeOrders },
+    { count: inactiveCustomersCount },
+    { data: recentOrders }
+  ] = cafeId ? await Promise.all([
+    supabase.from('orders').select('total_amount').eq('cafe_id', cafeId).gte('created_at', todayStart.toISOString()),
+    supabase.from('orders').select('total_amount').eq('cafe_id', cafeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', yesterdayEnd.toISOString()),
+    supabase.from('customers').select('id').eq('cafe_id', cafeId).gte('first_visit', todayStart.toISOString()),
+    supabase.from('orders').select('id').eq('cafe_id', cafeId),
+    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('cafe_id', cafeId).lte('last_visit', thirtyDaysAgo.toISOString()),
+    supabase.from('orders').select('id, total_amount, created_at, customer_phone, customers(name)').eq('cafe_id', cafeId).order('created_at', { ascending: false }).limit(7)
+  ]) : [
+    { data: [] }, { data: [] }, { data: [] }, { data: [] }, { count: 0 }, { data: [] }
+  ];
 
   const todayRevenue = (todayOrders || []).reduce((sum, o) => sum + o.total_amount, 0);
   const yesterdayRevenue = (yesterdayOrders || []).reduce((sum, o) => sum + o.total_amount, 0);
@@ -219,20 +235,7 @@ export default async function DashboardPage() {
   }
 
   const billsSent = todayOrders ? todayOrders.length : 0;
-
-  // 2. New customers today
-  const { data: todayCustomers } = cafeId ? await supabase
-    .from('customers')
-    .select('id')
-    .eq('cafe_id', cafeId)
-    .gte('first_visit', todayStart.toISOString()) : { data: [] };
   const newCustomers = todayCustomers ? todayCustomers.length : 0;
-
-  // 3. Avg Rating & counts
-  const { data: cafeOrders } = cafeId ? await supabase
-    .from('orders')
-    .select('id')
-    .eq('cafe_id', cafeId) : { data: [] };
 
   const orderIds = (cafeOrders || []).map(o => o.id);
 
@@ -240,25 +243,18 @@ export default async function DashboardPage() {
   let negativeReviewsCount = 0;
 
   if (orderIds.length > 0) {
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const { data: weekReviews } = await supabase
-      .from('reviews')
-      .select('rating')
-      .in('order_id', orderIds)
-      .gte('created_at', sevenDaysAgo.toISOString());
+    const [
+      { data: weekReviews },
+      { count }
+    ] = await Promise.all([
+      supabase.from('reviews').select('rating').in('order_id', orderIds).gte('created_at', sevenDaysAgo.toISOString()),
+      supabase.from('reviews').select('id', { count: 'exact', head: true }).in('order_id', orderIds).lte('rating', 2)
+    ]);
 
     if (weekReviews && weekReviews.length > 0) {
       const sum = weekReviews.reduce((acc, r) => acc + r.rating, 0);
       avgRating = (sum / weekReviews.length).toFixed(1);
     }
-
-    const { count } = await supabase
-      .from('reviews')
-      .select('id', { count: 'exact', head: true })
-      .in('order_id', orderIds)
-      .lte('rating', 2);
     negativeReviewsCount = count || 0;
   }
 
@@ -281,16 +277,6 @@ export default async function DashboardPage() {
     plan: planName,
   };
 
-  // 5. Inactive customers (last visit > 30 days ago)
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const { count: inactiveCustomersCount } = cafeId ? await supabase
-    .from('customers')
-    .select('id', { count: 'exact', head: true })
-    .eq('cafe_id', cafeId)
-    .lte('last_visit', thirtyDaysAgo.toISOString()) : { count: 0 };
-
   const alerts = [];
   if (negativeReviewsCount > 0) {
     alerts.push({
@@ -310,21 +296,6 @@ export default async function DashboardPage() {
   }
 
   // 6. Recent Activity
-  const { data: recentOrders } = cafeId ? await supabase
-    .from('orders')
-    .select(`
-      id,
-      total_amount,
-      created_at,
-      customer_phone,
-      customers (
-        name
-      )
-    `)
-    .eq('cafe_id', cafeId)
-    .order('created_at', { ascending: false })
-    .limit(7) : { data: [] };
-
   let activity: {
     initials: string;
     name: string;
@@ -354,11 +325,7 @@ export default async function DashboardPage() {
         
       const amountStr = formatRupees(order.total_amount);
 
-      const timeStr = new Date(order.created_at).toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
+      const timeStr = formatDistanceToNow(new Date(order.created_at), { addSuffix: true });
 
       const review = reviewMap.get(order.id);
       let tag = 'Awaiting reply';
