@@ -132,20 +132,24 @@ export async function POST(request: NextRequest) {
             rating: numericRating,
             rating_label: ratingLabel,
             is_private: isPrivate,
-            awaiting_feedback: isPrivate
+            awaiting_feedback: isPrivate,
+            is_resolved: false
           });
 
           if (insertError) {
-            console.error('[whatsapp/webhook] Failed to insert review:', insertError);
+            console.error('[whatsapp/webhook] Insert error:', insertError);
           } else {
-            console.log('[whatsapp/webhook] Review successfully inserted into Supabase!');
+            console.log('[whatsapp/webhook] Review saved successfully!');
           }
         }
       } catch (err) {
         console.error('[whatsapp/webhook] Insert/Send Error:', err);
-        // Do NOT throw — we must still reply to Meta
-        return NextResponse.json({ status: 'ok' });
+        // Do NOT abort — ALWAYS proceed to send WhatsApp replies
       }
+
+      // Always proceed to send reply messages regardless of insert result
+      const reviewLink = cafe.google_review_link;
+      console.log('[whatsapp/webhook] Sending replies with review link:', reviewLink);
 
       // Reply based on sentiment
       if (!isPrivate) {
