@@ -16,7 +16,7 @@ export default async function MenuManagementPage() {
   }
 
   // Parallel queries for categories and menu items
-  const [dbCategories, items] = await Promise.all([
+  const [dbCategoriesResult, itemsResult] = await Promise.all([
     supabase
       .from('categories')
       .select('*')
@@ -30,7 +30,10 @@ export default async function MenuManagementPage() {
       .order('created_at', { ascending: false })
   ]);
 
-  const formattedItems = (items || []).map((i: any) => ({
+  const dbCategories = dbCategoriesResult.data || [];
+  const items = itemsResult.data || [];
+
+  const formattedItems = (items ?? []).map((i: any) => ({
     id: i.id,
     name: i.name,
     price: Number(i.price),
@@ -46,7 +49,7 @@ export default async function MenuManagementPage() {
 
   // Merge unique categories from menu items into categoriesList
   uniqueItemCategories.forEach(name => {
-    if (!categoriesList.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    if (!(categoriesList ?? []).some((c: any) => c.name?.toLowerCase() === name.toLowerCase())) {
       categoriesList.push({
         id: name,
         name: name,

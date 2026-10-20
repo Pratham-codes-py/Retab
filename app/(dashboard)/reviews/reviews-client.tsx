@@ -35,7 +35,7 @@ const T = {
 // ---------------------------------------------------------------------------
 // Main Page Component
 // ---------------------------------------------------------------------------
-export default function ReviewsClient({ initialReviews }: { initialReviews?: any[] }) {
+export default function ReviewsClient({ initialReviews, error }: { initialReviews?: any[]; error?: string }) {
   const [reviews, setReviews] = useState<any[]>(initialReviews || []);
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'critical'>('all');
@@ -194,6 +194,11 @@ export default function ReviewsClient({ initialReviews }: { initialReviews?: any
 
   return (
     <div style={{ padding: '0px 0px 40px 0px' }}>
+      {error && (
+        <div style={{ padding: '12px 16px', background: '#fff0f0', border: '1px solid #ba1a1a', borderRadius: '8px', marginBottom: '16px', color: '#93000a', fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
       <style>{`
         .btn-outline {
           border: 1px solid ${T.outlineVariant};

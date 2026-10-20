@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
+const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY || '';
 const API_VERSION = '2023-08-01';
 
 function generateSignature(timestamp: string, body: string, secretKey: string): string {

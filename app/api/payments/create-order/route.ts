@@ -57,12 +57,18 @@ export async function POST(request: NextRequest) {
       order_note: `Credit pack: ${pack.label}`, // optional memo field
     };
 
+    const appId = process.env.CASHFREE_APP_ID || '';
+    const secretKey = process.env.CASHFREE_SECRET_KEY || '';
+    if (!appId || !secretKey) {
+      return NextResponse.json({ error: 'Cashfree credentials not configured' }, { status: 500 });
+    }
+
     // --- Call Cashfree API ---
     const cfRes = await fetch(`${CASHFREE_BASE}/orders`, {
       method: 'POST',
       headers: {
-        'x-client-id': process.env.CASHFREE_APP_ID,
-        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-client-id': appId,
+        'x-client-secret': secretKey,
         'x-api-version': API_VERSION,
         'Content-Type': 'application/json',
       },

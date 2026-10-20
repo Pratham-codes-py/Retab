@@ -245,7 +245,7 @@ export default async function DashboardPage() {
 
     // Single query for recent orders
     supabase.from('orders')
-      .select('id, total_amount, created_at, customer_phone')
+      .select('id, total_amount, created_at, customer_phone, customers(name)')
       .eq('cafe_id', cafeId)
       .order('created_at', { ascending: false })
       .limit(7)
@@ -345,7 +345,7 @@ export default async function DashboardPage() {
     const reviewMap = new Map((recentReviews || []).map(r => [r.order_id, r]));
 
     activity = recentOrders.map(order => {
-      const rawName = order.customers && (order.customers as any).name ? (order.customers as any).name : 'Guest';
+      const rawName = (order as any).customers?.name || (order as any).customer_phone || 'Guest';
       const initials = rawName
         .split(' ')
         .map((p: string) => p[0])
