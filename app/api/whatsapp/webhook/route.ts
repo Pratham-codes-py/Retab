@@ -95,16 +95,31 @@ export async function POST(request: NextRequest) {
 
       const { label, isPrivate } = mapped;
 
-      await supabase.from('reviews').insert({
-        cafe_id:          cafe.id,
-        customer_phone:   from,
-        rating_label:     label,
-        is_private:       isPrivate,
-        is_resolved:      false,
-        awaiting_feedback: isPrivate,  // true only for "needs_improvement"
-      });
+      // Map rating_label to numeric rating per the reviews table schema
+      const RATING_MAP: Record<'loved_it' | 'okay' | 'needs_improvement', number> = {
+        'loved_it': 5,
+        'okay': 3,
+        'needs_improvement': 1,
+      };
+      const rating = RATING_MAP[label];
 
-      console.log(`[whatsapp/webhook] Review inserted: "${title}" → ${label} (private=${isPrivate}) from ${from}`);
+      try {
+        await supabase.from('reviews').insert({
+          cafe_id:          cafe.id,
+          customer_phone:   from,
+          rating:           rating,
+          rating_label:     label,
+          is_private:       isPrivate,
+          is_resolved:      false,
+          awaiting_feedback: isPrivate,
+        });
+
+        console.log(`[whatsapp/webhook] Review inserted: "${title}" → ${label} (private=${isPrivate}) from ${from}`);
+      } catch (err) {
+        console.error('[whatsapp/webhook] Insert/Send Error:', err);
+        // Do NOT throw — we must still reply to Meta
+        return NextResponse.json({ status: 'ok' });
+      }
 
       // Reply based on sentiment
       if (!isPrivate) {
