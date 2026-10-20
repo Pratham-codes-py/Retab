@@ -10,7 +10,7 @@ export default async function ReviewsPage() {
   const { data: reviews, error } = await supabase
     .from('reviews')
     .select(`
-      id, rating, feedback_text, is_private, is_resolved, created_at,
+      id, rating, rating_label, feedback_text, is_private, is_resolved, awaiting_feedback, customer_phone, created_at,
       customer:customers(id, name, phone),
       orders(id, table_number, source)
     `)

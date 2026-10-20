@@ -95,16 +95,14 @@ export default async function AnalyticsPage() {
         .from('orders')
         .select('id, created_by, total_amount')
         .eq('cafe_id', cafe.id);
-
       const orderIds = (orders || []).map(o => o.id);
-      const orderItems = orderIds.length > 0
+      const { data: orderItemsData } = orderIds.length > 0
         ? await serviceRoleSupabase
             .from('order_items')
             .select('quantity, menu_items(name, price)')
             .in('order_id', orderIds)
         : { data: [] };
-
-      return { data: { orders, orderItems } };
+      return { data: { orders, orderItems: orderItemsData || [] } };
     })()
   ]);
 
@@ -129,8 +127,9 @@ export default async function AnalyticsPage() {
     total: Math.round(revenueTrendMap[date])
   }));
 
+  const { orders: perfOrders = [], orderItems: perfOrderItems = [] } = performanceData || {};
   const itemMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
-  orderItems?.forEach((item: any) => {
+  (perfOrderItems || []).forEach((item: any) => {
     const name = item.menu_items?.name || 'Unknown Item';
     const price = item.menu_items?.price || 0;
     if (!itemMap[name]) {
@@ -176,7 +175,7 @@ export default async function AnalyticsPage() {
   let okay = 0;
   let needs_improvement = 0;
 
-  reviews?.forEach(r => {
+  (reviewsStats ?? []).forEach((r: any) => {
     if (r.rating >= 4) loved_it++;
     else if (r.rating === 3) okay++;
     else needs_improvement++;

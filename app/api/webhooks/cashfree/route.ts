@@ -3,7 +3,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { credit_cafe } from '@/lib/supabase/server'; // RPC from migrations
 
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
 const API_VERSION = '2023-08-01';
@@ -51,14 +50,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing payment identifiers' }, { status: 400 });
   }
 
-  // Idempotent credit addition
+  // Idempotent credit addition via RPC
   const supabase = createServiceRoleClient();
-  const success = await credit_cafe(cf_payment_id, order_id);
+  const { data, error } = await supabase.rpc('credit_cafe', {
+    p_payment_id: cf_payment_id,
+    p_order_id: order_id,
+  });
 
-  if (!success) {
-    console.warn('[cashfree-webhook] credit_cafe failed for order', order_id);
+  if (error || !data) {
+    console.warn('[cashfree-webhook] credit_cafe failed for order', order_id, error);
     return NextResponse.json({ error: 'Could not credit cafe' }, { status: 409 });
   }
+
+  // data is boolean return value from the RPC
+  const success = Boolean(data);
 
   console.log('[cashfree-webhook] Successfully credited cafe for order', order_id);
   return NextResponse.json({ status: 'processed' });

@@ -169,14 +169,21 @@ export default function ReviewsClient({ initialReviews }: { initialReviews?: any
     const highlightBg = !r.is_resolved && r.rating <= 2 ? '#fffaf8' : '#ffffff';
     const highlightBorder = !r.is_resolved && r.rating <= 2 ? '#f2d5d1' : T.outlineVariant;
 
+    const customerPhone = r.customer_phone || r.customer?.phone || '';
+    const label = r.rating_label || (r.rating >= 4 ? 'loved_it' : r.rating === 3 ? 'okay' : 'needs_improvement');
+
     return {
       id: r.id,
       initials,
       customerName,
+      customerPhone,
       subtext,
       badge,
       badgeStyle,
-      feedbackText: r.feedback_text,
+      feedbackText: r.feedback_text || '',
+      ratingLabel: label,
+      isPrivate: r.is_private,
+      awaitingFeedback: r.awaiting_feedback,
       isResolved: r.is_resolved,
       actionType,
       highlightBg,

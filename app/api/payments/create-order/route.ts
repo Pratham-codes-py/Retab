@@ -4,7 +4,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { CREDIT_PACKS } from '@/lib/billing/packs';
-import { authUserCafeId } from '@/lib/supabase/server'; // SECURITY DEFINER helper from migrations
 
 const CASHFREE_BASE = 'https://sandbox.cashfree.com/pg';
 const API_VERSION = '2023-08-01';
@@ -25,7 +24,12 @@ export async function POST(request: NextRequest) {
   try {
     // --- Owner-only authorization ---
     const supabase = createServiceRoleClient();
-    const cafeId = await authUserCafeId(supabase);
+    const { data: cafeId, error } = await supabase.rpc('auth_user_cafe_id');
+
+    if (error || !cafeId) {
+      console.error('[create-order] auth_user_cafe_id error:', error);
+      return NextResponse.json({ error: 'Cafe not found or access denied' }, { status: 403 });
+    }
 
     const { packId } = await request.json();
     if (!packId) {

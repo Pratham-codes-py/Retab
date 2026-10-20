@@ -18,10 +18,11 @@ import { Cafe } from '@/types';
  * Returns { cafe: null, isOwner: true } when an owner has no cafe yet.
  * Returns { cafe: null, isOwner: false } when auth.getUser() returns null.
  */
-export const getActiveCafe = cache(async (): Promise<{
+
+async function _getActiveCafe(): Promise<{
   cafe: Cafe | null;
   isOwner: boolean;
-  staffProfileId: string | null;   // users.id for the staff member (null for owners)
+  staffProfileId: string | null;
 }> {
   try {
     const supabase = await createSupabaseServerClient();
@@ -31,11 +32,7 @@ export const getActiveCafe = cache(async (): Promise<{
       return { cafe: null, isOwner: false, staffProfileId: null };
     }
 
-    // Use service-role for ALL DB reads — bypasses RLS entirely.
-    // This makes this function work regardless of RLS migration state.
     const adminClient = createServiceRoleClient();
-
-    // First: check if this user is an owner (owns a cafe directly)
     const { data: ownedCafe } = await adminClient
       .from('cafes')
       .select('*')
@@ -46,7 +43,6 @@ export const getActiveCafe = cache(async (): Promise<{
       return { cafe: ownedCafe as Cafe, isOwner: true, staffProfileId: null };
     }
 
-    // Second: check if this is a staff/manager account
     const { data: profileRow } = await adminClient
       .from('users')
       .select('id, cafe_id, role')
@@ -66,16 +62,14 @@ export const getActiveCafe = cache(async (): Promise<{
       }
     }
 
-    // Authenticated user with no cafe (new owner needs setup wizard)
     return { cafe: null, isOwner: true, staffProfileId: null };
   } catch (err: any) {
-    // Re-throw Next.js dynamic server errors (redirect, notFound, etc.)
     if (err?.digest === 'DYNAMIC_SERVER_USAGE' || err?.message?.includes('Dynamic server usage')) {
       throw err;
     }
     console.error('[getActiveCafe] Error:', err);
-    // On DB errors: return isOwner: null so the layout can distinguish
-    // "DB failed" from "no profile" — prevents incorrectly signing the user out.
     return { cafe: null, isOwner: false, staffProfileId: null };
   }
 }
+
+export const getActiveCafe = cache(_getActiveCafe);
