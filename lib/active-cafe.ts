@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import 'server-only';
 import { createServiceRoleClient } from './supabase/server';
 import { createSupabaseServerClient } from './supabase/ssr-server';
@@ -17,7 +18,7 @@ import { Cafe } from '@/types';
  * Returns { cafe: null, isOwner: true } when an owner has no cafe yet.
  * Returns { cafe: null, isOwner: false } when auth.getUser() returns null.
  */
-export async function getActiveCafe(): Promise<{
+export const getActiveCafe = cache(async (): Promise<{
   cafe: Cafe | null;
   isOwner: boolean;
   staffProfileId: string | null;   // users.id for the staff member (null for owners)

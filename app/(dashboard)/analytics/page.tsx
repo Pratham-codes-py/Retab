@@ -4,7 +4,7 @@ import AnalyticsClient from './analytics-client';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { subDays, format } from 'date-fns';
 
-export const revalidate = 60;
+export const revalidate = 300; // Cache analytics for 5 minutes
 
 export default async function AnalyticsPage() {
   const { cafe } = await getActiveCafe();
@@ -49,33 +49,64 @@ export default async function AnalyticsPage() {
     .eq('cafe_id', cafe.id)
     .in('role', ['manager', 'staff']);
 
-  // Fetch order items
-  let orderItems: any[] = [];
+  // Fetch order items - separate parallel queries
+  let queryOrderItems: any[] = [];
+  let queryReviews: any[] = [];
+
+  // Fetch order items and reviews - parallel queries
+
   if (orderIds.length > 0) {
-    const { data } = await serviceRoleSupabase
-      .from('order_items')
-      .select('quantity, menu_items(name, price)')
-      .in('order_id', orderIds);
-    orderItems = data || [];
+    const [orderItemsResult, reviewsResult] = await Promise.all([
+      serviceRoleSupabase
+        .from('order_items')
+        .select('quantity, menu_items(name, price)')
+        .in('order_id', orderIds),
+
+      serviceRoleSupabase
+        .from('reviews')
+        .select('rating')
+        .in('order_id', orderIds)
+    ]);
+
+    queryOrderItems = orderItemsResult.data || [];
+    queryReviews = reviewsResult.data || [];
   }
 
-  // Fetch reviews
-  let reviews: any[] = [];
-  if (orderIds.length > 0) {
-    const { data } = await serviceRoleSupabase
+  // Parallel queries: top regulars + performance aggregations
+  const [
+    { data: topRegulars },
+    { data: reviewsStats },
+    { data: performanceData }
+  ] = await Promise.all([
+    serviceRoleSupabase
+      .from('customers')
+      .select('id, name, total_spend, visit_count')
+      .eq('cafe_id', cafe.id)
+      .order('total_spend', { ascending: false })
+      .limit(5),
+
+    serviceRoleSupabase
       .from('reviews')
       .select('rating')
-      .in('order_id', orderIds);
-    reviews = data || [];
-  }
+      .eq('cafe_id', cafe.id),
 
-  // Fetch top regulars
-  const { data: topRegulars } = await serviceRoleSupabase
-    .from('customers')
-    .select('id, name, total_spend, visit_count')
-    .eq('cafe_id', cafe.id)
-    .order('total_spend', { ascending: false })
-    .limit(5);
+    (async () => {
+      const { data: orders } = await serviceRoleSupabase
+        .from('orders')
+        .select('id, created_by, total_amount')
+        .eq('cafe_id', cafe.id);
+
+      const orderIds = (orders || []).map(o => o.id);
+      const orderItems = orderIds.length > 0
+        ? await serviceRoleSupabase
+            .from('order_items')
+            .select('quantity, menu_items(name, price)')
+            .in('order_id', orderIds)
+        : { data: [] };
+
+      return { data: { orders, orderItems } };
+    })()
+  ]);
 
   // Process aggregations
   const revenueTrendMap: Record<string, number> = {};

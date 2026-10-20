@@ -1,4 +1,4 @@
-export const revalidate = 60;
+export const revalidate = 300; // Cache settings for 5 minutes
 
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { getActiveCafe } from '@/lib/active-cafe';

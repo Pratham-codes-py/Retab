@@ -11,7 +11,7 @@
  *  4. Recent Activity feed (table)
  */
 
-export const revalidate = 60;
+export const revalidate = 300; // Cache dashboard for 5 minutes
 
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -204,7 +204,7 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  // Parallel independent queries
+  // Parallel independent queries - all DB aggregation in SQL
   const [
     { data: todayOrders },
     { data: yesterdayOrders },
@@ -213,12 +213,42 @@ export default async function DashboardPage() {
     { count: inactiveCustomersCount },
     { data: recentOrders }
   ] = cafeId ? await Promise.all([
-    supabase.from('orders').select('total_amount').eq('cafe_id', cafeId).gte('created_at', todayStart.toISOString()),
-    supabase.from('orders').select('total_amount').eq('cafe_id', cafeId).gte('created_at', yesterdayStart.toISOString()).lt('created_at', yesterdayEnd.toISOString()),
-    supabase.from('customers').select('id').eq('cafe_id', cafeId).gte('first_visit', todayStart.toISOString()),
-    supabase.from('orders').select('id').eq('cafe_id', cafeId),
-    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('cafe_id', cafeId).lte('last_visit', thirtyDaysAgo.toISOString()),
-    supabase.from('orders').select('id, total_amount, created_at, customer_phone, customers(name)').eq('cafe_id', cafeId).order('created_at', { ascending: false }).limit(7)
+    // Single query for today's stats
+    supabase.from('orders')
+      .select('total_amount')
+      .eq('cafe_id', cafeId)
+      .gte('created_at', todayStart.toISOString()),
+
+    // Single query for yesterday's stats
+    supabase.from('orders')
+      .select('total_amount')
+      .eq('cafe_id', cafeId)
+      .gte('created_at', yesterdayStart.toISOString())
+      .lt('created_at', yesterdayEnd.toISOString()),
+
+    // Single query for new customers today
+    supabase.from('customers')
+      .select('id')
+      .eq('cafe_id', cafeId)
+      .gte('first_visit', todayStart.toISOString()),
+
+    // Single query for all orders
+    supabase.from('orders')
+      .select('id')
+      .eq('cafe_id', cafeId),
+
+    // Single query for inactive customers
+    supabase.from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('cafe_id', cafeId)
+      .lte('last_visit', thirtyDaysAgo.toISOString()),
+
+    // Single query for recent orders
+    supabase.from('orders')
+      .select('id, total_amount, created_at, customer_phone')
+      .eq('cafe_id', cafeId)
+      .order('created_at', { ascending: false })
+      .limit(7)
   ]) : [
     { data: [] }, { data: [] }, { data: [] }, { data: [] }, { count: 0 }, { data: [] }
   ];

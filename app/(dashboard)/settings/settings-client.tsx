@@ -22,12 +22,14 @@ const T = {
   success: '#059669',
 } as const;
 
-export default function SettingsClient({ initialCafe }: { initialCafe: any }) {
+export default function SettingsClient({ initialCafe, initialPayments }: { initialCafe: any; initialPayments?: any[] }) {
   const supabase = createClient();
   const [googleLink, setGoogleLink] = useState(initialCafe?.google_review_link || 'https://g.page/r/greenbeans-cafe');
   const [taxPercent, setTaxPercent] = useState(initialCafe?.tax_percent?.toString() || '5');
   const [isSavingTax, setIsSavingTax] = useState(false);
   const [isSavingGoogleLink, setIsSavingGoogleLink] = useState(false);
+  const [payments, setPayments] = useState<any[]>(initialPayments || []);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(!initialPayments);
   
   const [staff, setStaff] = useState<any[]>([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
@@ -136,6 +138,25 @@ export default function SettingsClient({ initialCafe }: { initialCafe: any }) {
       alert('Google review link updated successfully');
     }
   };
+
+  // Load payment history for the cafe (top-up credits modal not yet implemented)
+  useEffect(() => {
+    async function loadPayments() {
+      if (initialPayments?.length) return; // already loaded via server
+      try {
+        const res = await fetch('/api/payments/list');
+        if (res.ok) {
+          const data = await res.json();
+          setPayments(data.payments || []);
+        }
+      } catch (err) {
+        console.error('Error loading payments:', err);
+      } finally {
+        setIsLoadingPayments(false);
+      }
+    }
+    loadPayments();
+  }, [initialPayments]);
 
   const handleSaveTax = async () => {
     if (!initialCafe) return;

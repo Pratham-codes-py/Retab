@@ -108,6 +108,52 @@ export async function sendTemplateMessage(
 }
 
 // ---------------------------------------------------------------------------
+// Plain-text message (within the 24-hour free conversation window)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sends a free-text WhatsApp message within the 24-hour customer-initiated
+ * conversation window. Do NOT use for outbound marketing or notifications —
+ * those must use approved templates.
+ *
+ * @param phoneNumberId - The cafe's WhatsApp Phone Number ID (from Meta)
+ * @param to            - Recipient phone in E.164 format
+ * @param text          - Message body (max 4096 chars)
+ */
+export async function sendTextMessage(
+  phoneNumberId: string,
+  to: string,
+  text: string
+): Promise<WhatsAppMessageResponse> {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    throw new Error('Missing WHATSAPP_ACCESS_TOKEN environment variable.');
+  }
+
+  const response = await fetch(`${BASE_URL}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: text },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`WhatsApp API error ${response.status}: ${errorText}`);
+  }
+
+  return response.json() as Promise<WhatsAppMessageResponse>;
+}
+
+// ---------------------------------------------------------------------------
 // Convenience: bill + review-request template
 // ---------------------------------------------------------------------------
 

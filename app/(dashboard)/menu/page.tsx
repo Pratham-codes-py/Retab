@@ -1,4 +1,4 @@
-export const revalidate = 60;
+export const revalidate = 300; // Cache menu for 5 minutes
 
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { getActiveCafe } from '@/lib/active-cafe';
@@ -15,19 +15,20 @@ export default async function MenuManagementPage() {
     return <MenuClient cafeId="" initialCategories={[]} initialItems={[]} />;
   }
 
-  // Fetch categories
-  const { data: dbCategories } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('cafe_id', cafeId)
-    .order('created_at', { ascending: true });
+  // Parallel queries for categories and menu items
+  const [dbCategories, items] = await Promise.all([
+    supabase
+      .from('categories')
+      .select('*')
+      .eq('cafe_id', cafeId)
+      .order('created_at', { ascending: true }),
 
-  // Fetch menu items
-  const { data: items } = await supabase
-    .from('menu_items')
-    .select('id, name, price, category, is_veg, created_at')
-    .eq('cafe_id', cafeId)
-    .order('created_at', { ascending: false });
+    supabase
+      .from('menu_items')
+      .select('id, name, price, category, is_veg, created_at')
+      .eq('cafe_id', cafeId)
+      .order('created_at', { ascending: false })
+  ]);
 
   const formattedItems = (items || []).map((i: any) => ({
     id: i.id,

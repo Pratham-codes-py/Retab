@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   description: 'Send bills and get reviews on WhatsApp automatically. Delight your customers with paperless billing and grow your online reputation.',
 };
 
+export const dynamic = 'force-static';
+export const revalidate = 3600; // Cache landing page for 1 hour
+
 // ─── Image URLs from Stitch design ───────────────────────────────────────────
 const HERO_IMG    = 'https://lh3.googleusercontent.com/aida-public/AB6AXuA5lzb7PhDJwblnW8dfhCxchWrdRQUTEMItSI5kiAhAxRCaZuCzwQ0tkoREyDpRPzEGHUlqdy_JU-BDCw1mPCy_sOewqWwwAFWgBp5aCcRwca1EyLJQ7uZqMdPrBbBTmqV4h4ttedNmWyjWRbob5BWpRcOGGKIMoJkPETUOZ5-yuNopQTUCYhLZ0hqVGlZjh94n5i3IkoGCxJlXYHv1WBfQ5DdG2t3NHHGnjeeINLvIjqDk0KMdDsM1kOaboHmLI2mQrNLFnMlaYM4E';
 const BILLING_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDQu7CxkG1R5T2c1S_CLy8c53r9FOwkr5Gx4JQoetkGL51yLb-isrt2ZavVO6m6ySeFkLMMJ99BqwKMP2mAfCkf4rKMhLzu-8iWlVKK-fEC20pfCrnPTvQlie8rM2b4rMl3idxjl1lVrDDygKUP42-hKaTJhOEp_f3fzm-WV3xoD2hkfvaB-PP4hY9g_9TOuwtlj5pUL3Z6HOjphFpFVY46lGrzIemsbEKIXeXZyRKSAA46v0yReurUyAOKFnuoGRBYtptbe-znfdSw';
@@ -170,7 +173,7 @@ export default function LandingPage() {
             </div>
             <div>
               <p style={{ fontSize: '14px', fontWeight: 500, color: '#1c1b1b', marginBottom: '2px' }}>New Review Received!</p>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: '#16a34a' }}>&ldquo;Amazing coffee, 5 stars!&rdquo;</p>
+              <p style={{ fontSize: '14px', fontWeight: 500, color: '#16a34a' }}>&ldquo;Update this with real customer feedback once you have verified reviews.&rdquo;</p>
             </div>
           </div>
         </div>
@@ -369,7 +372,7 @@ export default function LandingPage() {
       {/* ── Stats ─────────────────────────────────────────────────── */}
       <section id="about" style={{ padding: '80px 0', background: '#fff' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 32px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '40px', textAlign: 'center' }}>
-          {[['500+','Cafes in India'],['1M+','Bills Sent'],['4.9/5','Average Rating'],['30%','Review Increase']].map(([val,label]) => (
+          {[['—','Cafes using Retab (update when you have real numbers)'],['—','Bills sent (update when you have real numbers)'],['—','Average rating (update when you have real reviews)'],['—','Review growth (update when you have real data)']].map(([val,label]) => (
             <div key={label}>
               <p style={{ fontSize: '32px', fontWeight: 700, letterSpacing: '-0.02em', color: '#853423', lineHeight: 1.2, marginBottom: '4px' }}>{val}</p>
               <p style={{ fontSize: '14px', fontWeight: 500, color: '#55423e', letterSpacing: '0.01em' }}>{label}</p>
@@ -386,7 +389,7 @@ export default function LandingPage() {
             Ready to modernize your cafe?
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '18px', lineHeight: 1.6, marginBottom: '40px' }}>
-            Join the hundreds of cafes moving away from paper and into the future of automated guest delight.
+            Join the independent cafes using Retab for paperless billing and automated reviews. (Update with real count when available.)
           </p>
           <Link href="/login" className="cta-btn-primary" style={{
             display: 'inline-block',
@@ -409,16 +412,27 @@ export default function LandingPage() {
             <p style={{ color: '#55423e', fontSize: '14px', lineHeight: 1.6 }}>Making billing delightful for Indian cafes since 2024. Smart, simple, and paperless.</p>
           </div>
           {[
-            ['Product', ['Features','POS Integration','WhatsApp Engine']],
-            ['Company', ['About Us','Careers','Privacy Policy']],
-            ['Connect', ['Contact Support','Terms of Service']],
+            ['Product', ['Features','Pricing','About']],
+            ['Legal', ['Terms of Service','Refund Policy','Data Deletion']],
+            ['Connect', ['Contact','Privacy Policy']],
           ].map(([heading, links]) => (
             <div key={heading as string}>
               <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#1c1b1b', letterSpacing: '0.01em', marginBottom: '16px' }}>{heading}</h4>
               <ul style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {(links as string[]).map(link => (
-                  <li key={link}><a href="#" className="footer-link" style={{ color: '#55423e', fontSize: '14px', textDecoration: 'none', transition: 'color 0.15s ease' }}>{link}</a></li>
-                ))}
+                {(links as string[]).map(link => {
+                  const href =
+                    link === 'Features' ? '#features' :
+                    link === 'Pricing' ? '#pricing' :
+                    link === 'About' ? '#about' :
+                    link === 'Terms of Service' ? '/terms' :
+                    link === 'Refund Policy' ? '/refund-policy' :
+                    link === 'Data Deletion' ? '/data-deletion' :
+                    link === 'Contact' ? '/contact' :
+                    link === 'Privacy Policy' ? '/privacy' : '#';
+                  return (
+                    <li key={link}><a href={href} className="footer-link" style={{ color: '#55423e', fontSize: '14px', textDecoration: 'none', transition: 'color 0.15s ease' }}>{link}</a></li>
+                  );
+                })}
               </ul>
             </div>
           ))}

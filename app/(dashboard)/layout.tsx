@@ -12,9 +12,11 @@
  */
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 300; // Cache dashboard for 5 minutes
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { cache } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getActiveCafe } from '@/lib/active-cafe';

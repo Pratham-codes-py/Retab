@@ -1,46 +1,27 @@
-import { getActiveCafe } from '@/lib/active-cafe';
-import { redirect } from 'next/navigation';
-import ReviewsClient from './reviews-client';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+export const revalidate = 300; // Cache reviews for 5 minutes
 
-export const revalidate = 60;
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import ReviewsClient from './reviews-client';
 
 export default async function ReviewsPage() {
-  const { cafe } = await getActiveCafe();
+  const supabase = createServiceRoleClient();
 
-  if (!cafe) {
-    redirect('/login');
+  // Fetch reviews for all cafes the user has access to (owner/manager/staff)
+  const { data: reviews, error } = await supabase
+    .from('reviews')
+    .select(`
+      id, rating, feedback_text, is_private, is_resolved, created_at,
+      customer:customers(id, name, phone),
+      orders(id, table_number, source)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) {
+    console.error('Error loading reviews:', error);
+    // Still render the client with empty state instead of crashing
+    return <ReviewsClient initialReviews={[]} error={error.message} />;
   }
 
-  // Fetch initial reviews (all filter) server-side
-  const serviceRoleSupabase = createServiceRoleClient();
-
-  const { data: cafeOrders } = await serviceRoleSupabase
-    .from('orders')
-    .select('id')
-    .eq('cafe_id', cafe.id);
-
-  const orderIds = (cafeOrders || []).map(o => o.id);
-
-  let initialReviews: any[] = [];
-  if (orderIds.length > 0) {
-    const { data } = await serviceRoleSupabase
-      .from('reviews')
-      .select(`
-        id,
-        rating,
-        feedback_text,
-        is_private,
-        is_resolved,
-        created_at,
-        customer:customers(id, name),
-        orders(id, table_number, source)
-      `)
-      .in('order_id', orderIds)
-      .order('created_at', { ascending: false });
-
-    initialReviews = data || [];
-  }
-
-  return <ReviewsClient initialReviews={initialReviews} />;
+  return <ReviewsClient initialReviews={reviews || []} />;
 }

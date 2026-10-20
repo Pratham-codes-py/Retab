@@ -81,16 +81,27 @@ export interface OrderItem {
   quantity: number;
 }
 
+export type RatingLabel = 'loved_it' | 'okay' | 'needs_improvement';
+
 // ----------------------------------------------------------
 // reviews
 // ----------------------------------------------------------
 export interface Review {
   id: string;
-  order_id: string;
-  customer_id: string;
-  rating: number;             // 1–5
+  // order_id / customer_id are null for WhatsApp-originated reviews
+  order_id: string | null;
+  customer_id: string | null;
+  // cafe_id is set for WhatsApp reviews (direct tenant scope)
+  cafe_id: string | null;
+  // customer_phone stored in E.164; used for the 24h follow-up window
+  customer_phone: string | null;
+  rating: number | null;        // 1–5 (POS flow); null for WA-only reviews
+  rating_label: RatingLabel | null;  // text enum (WhatsApp flow)
   feedback_text: string | null;
-  is_private: boolean;        // true → internal only, false → redirected to Google
+  is_private: boolean;          // true → internal only, false → redirect to Google
+  is_resolved: boolean;
+  awaiting_feedback: boolean;   // true while waiting for follow-up text reply
+  created_at: string;
 }
 
 // ----------------------------------------------------------

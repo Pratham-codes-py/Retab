@@ -1,4 +1,4 @@
-export const revalidate = 60;
+export const revalidate = 300; // Cache customers for 5 minutes
 
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
 import { getActiveCafe } from '@/lib/active-cafe';
@@ -20,7 +20,7 @@ export default async function CustomersPage() {
     .from('customers')
     .select('*')
     .eq('cafe_id', cafeId)
-    .order('last_visit', { ascending: false });
+    .order('last_visit', { ascending: false })
 
   if (error) {
     console.error('Error fetching customers:', error);
