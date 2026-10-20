@@ -1,229 +1,190 @@
-// app/api/whatsapp/webhook/route.ts
-// Receives incoming WhatsApp messages and status updates from Meta.
-//
-// Flow:
-//  GET  — webhook verification (Meta sends a challenge during registration)
-//  POST — incoming messages:
-//           • interactive (button_reply) — customer tapped a rating button
-//           • text                       — free-text follow-up reply
-
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
-import { sendTextMessage } from '@/lib/whatsapp/client';
+import { createClient } from '@supabase/supabase-js';
 
-const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ?? '';
+// Server-side admin client using service-role key
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-// ---------------------------------------------------------------------------
-// Rating button label → DB enum + privacy flag
-// ---------------------------------------------------------------------------
-const BUTTON_MAP: Record<string, { label: 'loved_it' | 'okay' | 'needs_improvement'; isPrivate: boolean }> = {
-  'Amazing!':        { label: 'loved_it',          isPrivate: false },
-  'Loved it!':       { label: 'loved_it',          isPrivate: false },
-  'It was okay':     { label: 'okay',              isPrivate: false },
-  'Could be better': { label: 'needs_improvement', isPrivate: true  },
-};
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const mode = url.searchParams.get('hub.mode');
+  const token = url.searchParams.get('hub.verify_token');
+  const challenge = url.searchParams.get('hub.challenge');
 
-// ---------------------------------------------------------------------------
-// GET — Meta webhook verification handshake
-// ---------------------------------------------------------------------------
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const mode      = searchParams.get('hub.mode');
-  const token     = searchParams.get('hub.verify_token');
-  const challenge = searchParams.get('hub.challenge');
-
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('[whatsapp/webhook] Verification successful');
+  if (mode === 'subscribe' && (token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || token === process.env.WHATSAPP_VERIFY_TOKEN)) {
     return new NextResponse(challenge, { status: 200 });
   }
-
-  console.warn('[whatsapp/webhook] Verification failed — token mismatch');
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return new NextResponse('Forbidden', { status: 403 });
 }
 
-// ---------------------------------------------------------------------------
-// POST — incoming messages
-// ---------------------------------------------------------------------------
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
+    const entry = body.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+    const message = value?.messages?.[0];
 
-    // Meta sends a nested structure; extract the first message entry
-    const entry   = body?.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value   = changes?.value;
-    const messages = value?.messages;
-
-    if (!messages?.length) {
-      // Delivery receipts / status updates — acknowledge without processing
-      return NextResponse.json({ status: 'ok' });
+    // Filter out delivery/read status receipts
+    if (!message) {
+      return NextResponse.json({ status: 'ignored_status' }, { status: 200 });
     }
 
-    const message       = messages[0];
-    const from: string  = message.from;  // sender phone in E.164
-    const messageType: string = message.type;
+    const phoneId = value.metadata?.phone_number_id;
+    const customerPhone = message.from;
+    if (!phoneId || !customerPhone) {
+      return NextResponse.json({ status: 'missing_metadata' }, { status: 200 });
+    }
 
-    // The phone_number_id in metadata identifies which cafe this is for
-    // (one cafe ↔ one WhatsApp number → strict multi-tenant isolation)
-    const phoneNumberId: string = value?.metadata?.phone_number_id ?? '';
+    // 1. Production-grade button text parser (handles template quick_reply & interactive)
+    let buttonText: string | null = null;
+    if (message.type === 'button') {
+      buttonText = message.button?.text || message.button?.payload || null;
+    } else if (message.type === 'interactive') {
+      buttonText = message.interactive?.button_reply?.title || message.interactive?.button_reply?.id || null;
+    }
 
-    const customerPhone = from;
-    // The phone_number_id in metadata identifies which cafe this is for
-    // (one cafe ↔ one WhatsApp number → strict multi-tenant isolation)
-    const phoneId = value?.metadata?.phone_number_id;
-    console.log('[whatsapp/webhook] Incoming button from phoneId:', phoneId, 'customer:', customerPhone);
-
-    const supabase = createServiceRoleClient();
-
-    // Try matching by phone_number_id
-    let { data: cafe, error: cafeError } = await supabase
+    // 2. Multi-tenant cafe resolution (strict matching by phoneId)
+    let { data: cafe } = await supabase
       .from('cafes')
       .select('id, name, google_review_link')
       .eq('whatsapp_phone_number_id', phoneId)
       .maybeSingle();
 
-    // Fallback: If not found, fetch the primary cafe in the database so testing never fails
     if (!cafe) {
-      console.log('[whatsapp/webhook] No cafe matched phoneId, falling back to primary cafe');
       const { data: defaultCafe } = await supabase
         .from('cafes')
         .select('id, name, google_review_link')
         .limit(1)
-        .single();
+        .maybeSingle();
       cafe = defaultCafe;
     }
 
-    console.log('[whatsapp/webhook] Active cafe for review:', cafe?.name, 'ID:', cafe?.id);
-
     if (!cafe) {
-      console.warn(`[whatsapp/webhook] No cafe found for phone_number_id: ${phoneId}`);
-      return NextResponse.json({ status: 'ok' });
+      console.error('[whatsapp/webhook] No cafe found in database');
+      return NextResponse.json({ error: 'Cafe not found' }, { status: 200 });
     }
 
-    // -----------------------------------------------------------------------
-    // Path A — button tap (interactive / button_reply)
-    // -----------------------------------------------------------------------
-    if (messageType === 'interactive') {
-      const title: string = message.interactive?.button_reply?.title ?? '';
-      const mapped = BUTTON_MAP[title];
+    // Now TypeScript knows cafe is guaranteed to be non-null:
+    const cafeId: string = cafe.id;
+    const reviewLink: string = cafe.google_review_link || 'https://maps.google.com';
 
-      if (!mapped) {
-        console.warn(`[whatsapp/webhook] Unrecognised button title: "${title}"`);
-        return NextResponse.json({ status: 'ok' });
+    // 3. Process button review event
+    if (buttonText) {
+      const normalized = buttonText.trim().toLowerCase();
+      const isLoved = normalized.includes('amazing') || normalized.includes('loved');
+      const isOkay = normalized.includes('okay') || normalized === 'ok';
+      const isPoor = normalized.includes('better') || normalized.includes('poor');
+
+      const numericRating = isPoor ? 1 : isOkay ? 3 : 5;
+      const ratingLabel = isPoor ? 'needs_improvement' : isOkay ? 'okay' : 'loved_it';
+      const isPrivate = isPoor;
+
+      // Insert into reviews table strictly matching Supabase schema types
+      const { error: insertError } = await supabase.from('reviews').insert({
+        cafe_id: cafeId,
+        customer_phone: customerPhone,
+        rating: numericRating,
+        rating_label: ratingLabel,
+        is_private: isPrivate,
+        is_resolved: false,
+        awaiting_feedback: isPrivate
+      });
+
+      if (insertError) {
+        console.error('[whatsapp/webhook] Review insert failed:', insertError);
       }
 
-      const { label, isPrivate } = mapped;
-
-      // Map rating_label to numeric rating per the reviews table schema
-      const RATING_MAP: Record<'loved_it' | 'okay' | 'needs_improvement', number> = {
-        'loved_it': 5,
-        'okay': 3,
-        'needs_improvement': 1,
-      };
-      const rating = RATING_MAP[label];
-
-      const numericRating = rating; // 5
-      const ratingLabel = label; // 'loved_it'
-      try {
-        if (cafe?.id) {
-          const { error: insertError } = await supabase.from('reviews').insert({
-            cafe_id: cafe.id,
-            customer_phone: customerPhone,
-            rating: numericRating,
-            rating_label: ratingLabel,
-            is_private: isPrivate,
-            awaiting_feedback: isPrivate,
-            is_resolved: false
-          });
-
-          if (insertError) {
-            console.error('[whatsapp/webhook] Insert error:', insertError);
-          } else {
-            console.log('[whatsapp/webhook] Review saved successfully!');
-          }
-        }
-      } catch (err) {
-        console.error('[whatsapp/webhook] Insert/Send Error:', err);
-        // Do NOT abort — ALWAYS proceed to send WhatsApp replies
+      // Outbound dispatch: customer service window is open
+      const token = process.env.WHATSAPP_ACCESS_TOKEN;
+      if (!token) {
+        console.error('[whatsapp/webhook] WHATSAPP_ACCESS_TOKEN missing');
+        return NextResponse.json({ error: 'Missing token' }, { status: 200 });
       }
 
-      // Always proceed to send reply messages regardless of insert result
-      const reviewLink = cafe.google_review_link;
-      console.log('[whatsapp/webhook] Sending replies with review link:', reviewLink);
-
-      // Reply based on sentiment
-      if (!isPrivate) {
-        // Positive / neutral: thank them, optionally nudge a Google review
-        const metaRes = await sendTextMessage(
-          phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID,
-          customerPhone,
+      if (isPoor) {
+        await sendWhatsAppMessage(token, phoneId, customerPhone,
+          "Thank you for letting us know. We're always trying to improve — what could we have done better during your visit? (Just reply here)"
+        );
+      } else {
+        await sendWhatsAppMessage(token, phoneId, customerPhone,
           "Thank you for visiting! We're thrilled you had a great experience 😊"
         );
-        console.log('[whatsapp/webhook] Outgoing message sent, result:', metaRes);
 
-        if (cafe.google_review_link) {
-          const metaResLink = await sendTextMessage(
-            phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID,
-            customerPhone,
-            `It would mean a lot if you left us a quick Google review — it really helps independent spots like ours:\n${cafe.google_review_link}`
+        if (reviewLink) {
+          await sendWhatsAppMessage(token, phoneId, customerPhone,
+            `It would mean the world to our team if you left us a quick Google review — it really helps independent spots like ours:\n${reviewLink}`
           );
-          console.log('[whatsapp/webhook] Outgoing message sent, result:', metaResLink);
         }
-      } else {
-        // Negative: invite free-text follow-up
-        const metaResNeg = await sendTextMessage(
-          phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID,
-          customerPhone,
-          "Thank you for letting us know. We're always trying to improve — what could we have done better during your visit? (Just reply directly to this message)"
-        );
-        console.log('[whatsapp/webhook] Outgoing message sent, result:', metaResNeg);
       }
+
+      return NextResponse.json({ status: 'processed_button' }, { status: 200 });
     }
 
-    // -----------------------------------------------------------------------
-    // Path B — plain-text reply (follow-up feedback in the 24h window)
-    // -----------------------------------------------------------------------
-    if (messageType === 'text') {
-      const feedbackText: string = message.text?.body ?? '';
-
-      // Look for an open feedback request from this phone within the last 24h
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-      const { data: pending } = await supabase
+    // 4. Process free-text follow-up feedback
+    if (message.type === 'text' && message.text?.body) {
+      const feedbackText = message.text.body;
+      const { data: pendingReview } = await supabase
         .from('reviews')
         .select('id')
-        .eq('cafe_id', cafe.id)
-        .eq('customer_phone', from)
+        .eq('cafe_id', cafeId)
+        .eq('customer_phone', customerPhone)
         .eq('awaiting_feedback', true)
-        .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
 
-      if (pending) {
+      if (pendingReview) {
         await supabase
           .from('reviews')
-          .update({ feedback_text: feedbackText, awaiting_feedback: false })
-          .eq('id', pending.id);
+          .update({
+            feedback_text: feedbackText,
+            awaiting_feedback: false
+          })
+          .eq('id', pendingReview.id);
 
-        const metaResFeedback = await sendTextMessage(
-          phoneId || process.env.WHATSAPP_PHONE_NUMBER_ID,
-          customerPhone,
-          'Thank you for sharing your feedback with us 🙏 Our team has received it directly.'
-        );
-        console.log('[whatsapp/webhook] Outgoing message sent, result:', metaResFeedback);
-
-        console.log(`[whatsapp/webhook] Feedback captured for review ${pending.id} from ${from}`);
-      } else {
-        // No pending review — ignore silently (could be a random message)
-        console.log(`[whatsapp/webhook] Text from ${from} — no pending review, ignored`);
+        const token = process.env.WHATSAPP_ACCESS_TOKEN;
+        if (token) {
+          await sendWhatsAppMessage(token, phoneId, customerPhone,
+            "Thank you for sharing your feedback with us 🙏 Our team has received it directly."
+          );
+        }
       }
+
+      return NextResponse.json({ status: 'processed_text' }, { status: 200 });
     }
 
-    return NextResponse.json({ status: 'ok' });
-  } catch (err) {
-    console.error('[whatsapp/webhook] Error:', err);
-    // Always return 200 to Meta to prevent retry storms
-    return NextResponse.json({ status: 'error' }, { status: 200 });
+    return NextResponse.json({ status: 'unhandled_event' }, { status: 200 });
+  } catch (err: any) {
+    console.error('[whatsapp/webhook] Execution error:', err);
+    return NextResponse.json({ error: err.message }, { status: 200 });
   }
+}
+
+async function sendWhatsAppMessage(token: string, phoneId: string, to: string, text: string) {
+  const cleanPhone = to.replace(/^\+/, '');
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: cleanPhone,
+      type: 'text',
+      text: { body: text },
+    }),
+  });
+
+  const resData = await res.json();
+  if (!res.ok) {
+    console.error('[whatsapp/webhook] Outbound delivery failed:', res.status, resData);
+  } else {
+    console.log('[whatsapp/webhook] Outbound message delivered:', resData.messages?.[0]?.id);
+  }
+  return resData;
 }
