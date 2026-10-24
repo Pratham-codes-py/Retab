@@ -87,15 +87,15 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
 
   // Compute stats dynamically from the fetched reviews list
   const totalFeedback = reviews.length;
-  
-  const averageRating = totalFeedback > 0 
+
+  const averageRating = totalFeedback > 0
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / totalFeedback).toFixed(1)
     : '0.0';
-    
+
   const positiveCount = reviews.filter(r => r.rating >= 4).length;
   const neutralCount = reviews.filter(r => r.rating === 3).length;
   const criticalCount = reviews.filter(r => r.rating <= 2).length;
-  
+
   const sentimentScore = totalFeedback > 0
     ? Math.round((positiveCount / totalFeedback) * 100)
     : 0;
@@ -103,7 +103,7 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
   // Sentiment Trends over last 7 days (grouped dynamically by day of week)
   const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   const trendsMap: Record<string, { positive: number; neutral: number; negative: number; total: number }> = {};
-  
+
   // Initialize last 7 days
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -111,7 +111,7 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
     const dayName = daysOfWeek[d.getDay()];
     trendsMap[dayName] = { positive: 0, neutral: 0, negative: 0, total: 0 };
   }
-  
+
   reviews.forEach(r => {
     const d = new Date(r.created_at);
     const diffTime = Math.abs(new Date().getTime() - d.getTime());
@@ -138,22 +138,59 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
     };
   });
 
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
+
+  const handleSendReply = async (reviewId: string, customerPhone: string) => {
+    if (!replyMessage.trim()) return;
+
+    setIsSendingReply(true);
+    try {
+      const response = await fetch('/api/reviews/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewId, message: replyMessage })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state
+        setReviews(prev => prev.map(r =>
+          r.id === reviewId
+            ? { ...r, is_resolved: true }
+            : r
+        ));
+        setReplyMessage('');
+        setReplyingTo(null);
+        console.log('Reply sent successfully:', data);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to send reply:', errorData.error);
+        alert(`Failed to send reply: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error sending reply:', err);
+      alert('Failed to send reply. Please try again.');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   // Map backend reviews to existing UI representation
   const uiReviews = reviews.map(r => {
     const customerName = r.customer?.name || 'Anonymous Guest';
     const initials = customerName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'AG';
-    const table = r.orders?.table_number ? `Table ${r.orders.table_number}` : 'Takeaway';
-    const source = r.orders?.source ? `via ${r.orders.source}` : 'via WhatsApp';
-    
+
     const dateStr = new Date(r.created_at).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit'
     });
-    
-    const subtext = `${table} • ${dateStr} ${source}`;
-    
+
+    const subtext = `Placed ${dateStr}`;
+
     let badge = 'IT WAS OKAY';
     let badgeStyle = 'neutral';
     if (r.rating >= 4) {
@@ -163,9 +200,9 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
       badge = 'COULD BE BETTER';
       badgeStyle = 'negative';
     }
-    
+
     const actionType = r.is_resolved ? 'message_guest' : 'reply_now';
-    
+
     const highlightBg = !r.is_resolved && r.rating <= 2 ? '#fffaf8' : '#ffffff';
     const highlightBorder = !r.is_resolved && r.rating <= 2 ? '#f2d5d1' : T.outlineVariant;
 

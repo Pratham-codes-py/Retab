@@ -45,40 +45,21 @@ export async function GET(request: NextRequest) {
     // Resolve active cafe
     const { cafe } = await getActiveCafe();
 
-    if (!cafe) {
+    if (!cafe || !cafe.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const serviceRoleSupabase = createServiceRoleClient();
-
-    // Get all order IDs for this cafe
-    const { data: cafeOrders } = await serviceRoleSupabase
-      .from('orders')
-      .select('id')
-      .eq('cafe_id', cafe.id);
-
-    const orderIds = (cafeOrders || []).map(o => o.id);
-
-    if (orderIds.length === 0) {
-      return NextResponse.json({ reviews: [] });
-    }
 
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('rating'); // e.g. positive, critical, neutral
 
     let query = serviceRoleSupabase
       .from('reviews')
-      .select(`
-        id,
-        rating,
-        feedback_text,
-        is_private,
-        is_resolved,
-        created_at,
-        customer:customers(id, name),
-        orders(id, table_number, source)
-      `)
-      .in('order_id', orderIds);
+      .select(
+        'id, cafe_id, order_id, customer_id, customer_phone, rating, rating_label, feedback_text, is_private, is_resolved, awaiting_feedback, created_at, customer:customers(id, name, phone), orders(id, total_amount, created_at)'
+      )
+      .eq('cafe_id', cafe.id);
 
     if (filter === 'positive' || filter === 'loved_it') {
       query = query.gte('rating', 4);
@@ -106,7 +87,7 @@ export async function PATCH(request: NextRequest) {
     // Resolve active cafe
     const { cafe } = await getActiveCafe();
 
-    if (!cafe) {
+    if (!cafe || !cafe.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -120,13 +101,13 @@ export async function PATCH(request: NextRequest) {
     const serviceRoleSupabase = createServiceRoleClient();
 
     // Verify ownership
-    const { data: reviewOrder } = await serviceRoleSupabase
+    const { data: review } = await serviceRoleSupabase
       .from('reviews')
-      .select('orders(cafe_id)')
+      .select('cafe_id')
       .eq('id', id)
       .single();
 
-    if (!reviewOrder || (reviewOrder.orders as any)?.cafe_id !== cafe.id) {
+    if (!review || review.cafe_id !== cafe.id) {
       return NextResponse.json({ error: 'Unauthorized review operation' }, { status: 403 });
     }
 
