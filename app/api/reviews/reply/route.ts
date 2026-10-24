@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cafe not found' }, { status: 404 });
     }
 
-    const phoneId = cafe.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '1379415518580795';
+    const phoneId = cafe?.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '1379415518580795';
 
-    const phoneNumber = review.customer_phone?.replace(/^\+/, '') || '';
+    const phoneNumber = review.customer_phone?.replace(/\D/g, '') || '';
     if (!phoneNumber) {
       return NextResponse.json({ error: 'Customer phone not available' }, { status: 400 });
     }
@@ -63,23 +63,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to send WhatsApp message' }, { status: 500 });
     }
 
-    // Mark review as resolved
-    const { data: updatedReview, error: updateError } = await supabase
+    // Update reviews set is_resolved = true
+    const { error: updateError } = await supabase
       .from('reviews')
       .update({ is_resolved: true })
-      .eq('id', reviewId)
-      .select()
-      .single();
+      .eq('id', reviewId);
 
     if (updateError) {
       return NextResponse.json({ error: 'Failed to update review' }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      review: updatedReview,
-      message: 'WhatsApp message sent and review resolved successfully'
-    }, { status: 200 });
+    return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err) {
     console.error('[reviews/reply/POST] Unexpected error:', err);

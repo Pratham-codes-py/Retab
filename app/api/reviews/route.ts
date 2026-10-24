@@ -42,17 +42,23 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Resolve active cafe
-    const { cafe } = await getActiveCafe();
+    const serviceRoleSupabase = createServiceRoleClient();
 
+    const { cafe } = await getActiveCafe();
     if (!cafe || !cafe.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const serviceRoleSupabase = createServiceRoleClient();
+    // Fetch cafe customers for name matching
+    const { data: cafeCustomers } = await serviceRoleSupabase
+      .from('customers')
+      .select('id, name, phone')
+      .eq('cafe_id', cafe.id);
+
+    const customers = (cafeCustomers || []);
 
     const { searchParams } = new URL(request.url);
-    const filter = searchParams.get('rating'); // e.g. positive, critical, neutral
+    const filter = searchParams.get('rating');
 
     let query = serviceRoleSupabase
       .from('reviews')
@@ -75,7 +81,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: reviewsError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ reviews: reviews || [] });
+    // Enrich reviews with customer name matching
+    const enrichedReviews = (reviews || []).map((review: any) => {
+      const reviewPhone = (review.customer_phone || '').replace(/\D/g, '');
+      const last10 = reviewPhone.slice(-10);
+
+      let matchedCustomer = null;
+      if (!review.customer?.name && last10) {
+        matchedCustomer = customers.find((c: any) => {
+          const cPhone = (c.phone || '').replace(/\D/g, '');
+          return cPhone.slice(-10) === last10;
+        });
+      }
+
+      const customerName = review.customer?.name || matchedCustomer?.name || null;
+
+      return {
+        ...review,
+        customer_name: customerName,
+        customer_phone: review.customer_phone ? `+${review.customer_phone.replace(/\D/g, '')}` : ''
+      };
+    });
+
+    return NextResponse.json({ reviews: enrichedReviews });
   } catch (err) {
     console.error('[reviews/GET] Unexpected error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -84,13 +112,6 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Resolve active cafe
-    const { cafe } = await getActiveCafe();
-
-    if (!cafe || !cafe.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
     const { id, is_resolved } = body;
 
@@ -99,17 +120,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     const serviceRoleSupabase = createServiceRoleClient();
-
-    // Verify ownership
-    const { data: review } = await serviceRoleSupabase
-      .from('reviews')
-      .select('cafe_id')
-      .eq('id', id)
-      .single();
-
-    if (!review || review.cafe_id !== cafe.id) {
-      return NextResponse.json({ error: 'Unauthorized review operation' }, { status: 403 });
-    }
 
     const { data, error } = await serviceRoleSupabase
       .from('reviews')

@@ -60,21 +60,25 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
     fetchReviews();
   }, [filter]);
 
-  const handleResolve = async (id: string) => {
+  const handleToggleResolved = async (id: string, currentState: boolean) => {
+    const newState = !currentState;
+    // Optimistic update
+    setReviews(prev => prev.map(r => r.id === id ? { ...r, is_resolved: newState } : r));
     try {
       const res = await fetch('/api/reviews', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, is_resolved: true })
+        body: JSON.stringify({ id, is_resolved: newState })
       });
-      const data = await res.json();
-      if (res.ok) {
-        setReviews(prev => prev.map(r => r.id === id ? { ...r, is_resolved: true } : r));
-      } else {
-        alert('Failed to resolve review: ' + (data.error || 'Unknown error'));
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to toggle resolved:', data.error);
+        // Revert on failure
+        setReviews(prev => prev.map(r => r.id === id ? { ...r, is_resolved: currentState } : r));
       }
     } catch (err) {
-      console.error('Error resolving review:', err);
+      console.error('Error toggling resolved:', err);
+      setReviews(prev => prev.map(r => r.id === id ? { ...r, is_resolved: currentState } : r));
     }
   };
 
@@ -96,9 +100,7 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
   const neutralCount = reviews.filter(r => r.rating === 3).length;
   const criticalCount = reviews.filter(r => r.rating <= 2).length;
 
-  const sentimentScore = totalFeedback > 0
-    ? Math.round((positiveCount / totalFeedback) * 100)
-    : 0;
+  const googleLinksSent = reviews.filter(r => r.rating >= 4 || r.rating_label === 'loved_it').length;
 
   // Sentiment Trends over last 7 days (grouped dynamically by day of week)
   const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -332,19 +334,17 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
           </div>
         </div>
 
-        {/* Stat 3: Sentiment Score */}
+        {/* Stat 3: Google Links Sent */}
         <div className="stat-card">
           <div>
             <div className="icon-box" style={{ background: '#fff3e0', color: '#e65100' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>sentiment_satisfied</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>link</span>
             </div>
-            <p style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Sentiment Score</p>
+            <p style={{ fontSize: '14px', color: T.onSurfaceVariant, fontWeight: 500 }}>Google Links Sent</p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '32px', fontWeight: 800, color: T.onSurface, lineHeight: 1 }}>{sentimentScore}%</span>
-            <div style={{ flex: 1, height: '6px', background: T.surfaceVariant, borderRadius: '9999px', overflow: 'hidden' }}>
-              <div style={{ width: `${sentimentScore}%`, height: '100%', background: T.primary, borderRadius: '9999px' }} />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontSize: '32px', fontWeight: 800, color: T.onSurface, lineHeight: 1 }}>{googleLinksSent}</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant }}>Pushed to Google Maps</span>
           </div>
         </div>
 
@@ -483,101 +483,198 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
             No reviews match the selected filter.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {uiReviews.map((r) => {
-              const badgeTheme = getBadgeStyle(r.badgeStyle);
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {uiReviews.slice(0, 12).map((r) => {
+                const badgeTheme = getBadgeStyle(r.badgeStyle);
+                const customerName = (r as any).customer_name || r.customerName || 'Walk-in Guest';
+                const phoneDisplay = (r as any).customer_phone || r.customerPhone || '';
+                const isResolved = r.isResolved || (r as any).is_resolved;
 
-              return (
-                <div key={r.id} style={{
-                  background: r.highlightBg, 
-                  border: `1px solid ${r.highlightBorder}`, 
-                  borderRadius: '12px', 
-                  padding: '24px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    
-                    {/* Avatar & Name */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <div style={{
-                        width: '44px', height: '44px', borderRadius: '50%', background: '#f5ebe9',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '15px', fontWeight: 700, color: T.primary
-                      }}>
-                        {r.initials}
-                      </div>
+                return (
+                  <div key={r.id} style={{
+                    background: isResolved ? '#f0fdf4' : '#ffffff',
+                    border: `1px solid ${isResolved ? '#bbf7d0' : '#E6E1DA'}`,
+                    borderRadius: '12px',
+                    padding: '16px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}>
+                    {/* Header: Name, Phone, Badge */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 700, color: T.onSurface, marginBottom: '2px' }}>{r.customerName}</h4>
-                        <p style={{ fontSize: '12px', color: '#9ca3af' }}>{r.subtext}</p>
+                        <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#1C1917', marginBottom: '2px', lineHeight: 1.2 }}>
+                          {customerName}
+                        </h4>
+                        {phoneDisplay && (
+                          <p style={{ fontSize: '12px', color: '#6b7280', fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em' }}>
+                            {phoneDisplay}
+                          </p>
+                        )}
                       </div>
+                      <span style={{
+                        padding: '3px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        background: badgeTheme.bg,
+                        color: badgeTheme.color,
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        marginLeft: '8px'
+                      }}>
+                        {r.badge}
+                      </span>
                     </div>
 
-                    {/* Actions & Badges */}
-                    <div style={{ display: 'flex', gap: '20px' }}>
-                      
-                      {/* Badge */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                         <span style={{
-                          padding: '4px 12px', borderRadius: '9999px', fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em',
-                          background: badgeTheme.bg, color: badgeTheme.color,
-                          marginTop: '4px'
+                    {/* Stars */}
+                    <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                      {[...Array(5)].map((_, i) => (
+                        <span key={i} style={{
+                          fontSize: '18px',
+                          color: i < r.stars ? '#D97706' : '#E5E7EB'
                         }}>
-                          {r.badge}
+                          ★
                         </span>
-                      </div>
-
-                      {/* Buttons */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        
-                        {r.actionType === 'reply_now' && (
-                          <>
-                            <button className="btn-solid" style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', width: '160px'
-                            }}>
-                              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>undo</span>
-                              Reply Now <span style={{ opacity: 0.7, fontWeight: 400, fontSize: '11px' }}>(Free)</span>
-                            </button>
-                            <button className="btn-outline" onClick={() => handleResolve(r.id)} style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', width: '160px',
-                              background: '#ffffff'
-                            }}>
-                              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
-                              Mark Resolved
-                            </button>
-                          </>
-                        )}
-
-                        {r.actionType === 'message_guest' && (
-                          <button className="dark-grey-btn" style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', width: '160px'
-                          }}>
-                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chat</span>
-                            Message Guest
-                          </button>
-                        )}
-                      </div>
+                      ))}
                     </div>
-                  </div>
 
-                  {/* Feedback Text */}
-                  <div style={{ marginTop: '8px', marginLeft: '60px', maxWidth: '75%' }}>
-                     {r.feedbackText ? (
-                       <p style={{ fontSize: '14px', color: T.onSurfaceVariant, fontStyle: 'italic', lineHeight: 1.6 }}>
-                         "{r.feedbackText}"
-                       </p>
-                     ) : (
-                       <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                         {[...Array(r.stars)].map((_, i) => (
-                           <span key={i} className="material-symbols-outlined" style={{ fontSize: '20px', color: '#fbbf24' }}>star</span>
-                         ))}
-                       </div>
-                     )}
-                  </div>
+                    {/* Feedback */}
+                    <div style={{
+                      background: '#FAF7F2',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid #E6E1DA',
+                      fontSize: '15px',
+                      fontWeight: 500,
+                      color: '#1C1917',
+                      lineHeight: 1.4,
+                      minHeight: '48px'
+                    }}>
+                      {r.feedbackText ? (
+                        `"${r.feedbackText}"`
+                      ) : r.stars >= 5 ? (
+                        <span style={{ color: '#9ca3af', fontStyle: 'italic', fontWeight: 400 }}>Tapped 'Amazing!' on WhatsApp</span>
+                      ) : (
+                        <span style={{ color: '#9ca3af' }}>-</span>
+                      )}
+                    </div>
 
-                </div>
-              );
-            })}
-          </div>
+                    {/* Footer: Mark Read + Reply */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '4px' }}>
+                      <button
+                        onClick={() => handleToggleResolved(r.id, isResolved)}
+                        style={{
+                          flex: 1,
+                          padding: '7px 8px',
+                          borderRadius: '6px',
+                          border: `1px solid ${isResolved ? '#bbf7d0' : '#E6E1DA'}`,
+                          background: isResolved ? '#dcfce7' : '#fff',
+                          color: isResolved ? '#15803d' : '#374151',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        {isResolved ? '✓ Read' : 'Mark as Read'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReplyingTo(replyingTo === r.id ? null : r.id);
+                          if (replyingTo !== r.id) setReplyMessage('');
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '7px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #E6E1DA',
+                          background: '#fff',
+                          color: '#374151',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        Reply
+                      </button>
+                    </div>
+
+                    {/* Inline Reply Input */}
+                    {replyingTo === r.id && (
+                      <div style={{ display: 'flex', gap: '6px', paddingTop: '4px', borderTop: '1px solid #E6E1DA' }}>
+                        <input
+                          type="text"
+                          value={replyMessage}
+                          onChange={e => setReplyMessage(e.target.value)}
+                          placeholder="Type reply..."
+                          style={{
+                            flex: 1,
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #E6E1DA',
+                            fontSize: '13px',
+                            outline: 'none'
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleSendReply(r.id, (r as any).customer_phone || r.customerPhone || '');
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSendReply(r.id, (r as any).customer_phone || r.customerPhone || '')}
+                          disabled={isSendingReply || !replyMessage.trim()}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: '#853423',
+                            color: '#fff',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: isSendingReply || !replyMessage.trim() ? 'not-allowed' : 'pointer',
+                            opacity: isSendingReply || !replyMessage.trim() ? 0.7 : 1
+                          }}
+                        >
+                          {isSendingReply ? 'Sending...' : 'Send'}
+                        </button>
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })}
+            </div>
+
+            {uiReviews.length > 12 && (
+              <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <button
+                  onClick={() => {}}
+                  style={{
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    border: '1px solid #E6E1DA',
+                    background: '#fff',
+                    color: '#374151',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Show All Reviews
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
