@@ -81,17 +81,14 @@ export async function GET(request: NextRequest) {
 
     // 3. Fetch Reviews for Rating Breakdown (filter by order IDs)
     let reviews: any[] = [];
-    if (orderIds.length > 0) {
-      const { data, error: reviewsError } = await serviceRoleSupabase
-        .from('reviews')
-        .select('rating')
-        .in('order_id', orderIds);
-
-      if (reviewsError) {
-        return NextResponse.json({ error: reviewsError.message }, { status: 500 });
-      }
-      reviews = data || [];
+    const { data: reviewsByCafe, error: reviewsError } = await serviceRoleSupabase
+      .from('reviews')
+      .select('rating, rating_label')
+      .eq('cafe_id', cafe.id);
+    if (reviewsError) {
+      return NextResponse.json({ error: reviewsError.message }, { status: 500 });
     }
+    reviews = reviewsByCafe || [];
 
     // 4. Fetch Top Regulars
     const { data: topRegulars, error: regularsError } = await serviceRoleSupabase

@@ -100,7 +100,7 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
   const neutralCount = reviews.filter(r => r.rating === 3).length;
   const criticalCount = reviews.filter(r => r.rating <= 2).length;
 
-  const googleLinksSent = reviews.filter(r => r.rating >= 4 || r.rating_label === 'loved_it').length;
+  const googleLinksSent = reviews.filter(r => r.rating >= 4 || r.ratingLabel === 'loved_it').length;
 
   // Sentiment Trends over last 7 days (grouped dynamically by day of week)
   const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -556,8 +556,12 @@ export default function ReviewsClient({ initialReviews, error }: { initialReview
                     }}>
                       {r.feedbackText ? (
                         `"${r.feedbackText}"`
-                      ) : r.stars >= 5 ? (
+                      ) : r.stars >= 4 || r.ratingLabel === 'loved_it' ? (
                         <span style={{ color: '#9ca3af', fontStyle: 'italic', fontWeight: 400 }}>Tapped 'Amazing!' on WhatsApp</span>
+                      ) : r.stars === 3 || r.ratingLabel === 'okay' ? (
+                        <span style={{ color: '#9ca3af', fontStyle: 'italic', fontWeight: 400 }}>Tapped 'It was okay' on WhatsApp</span>
+                      ) : r.stars <= 2 || r.ratingLabel === 'needs_improvement' ? (
+                        <span style={{ color: '#9ca3af', fontStyle: 'italic', fontWeight: 400 }}>Waiting for customer reply on WhatsApp...</span>
                       ) : (
                         <span style={{ color: '#9ca3af' }}>-</span>
                       )}

@@ -277,8 +277,8 @@ export default async function DashboardPage() {
       { data: weekReviews },
       { count }
     ] = await Promise.all([
-      supabase.from('reviews').select('rating').in('order_id', orderIds).gte('created_at', sevenDaysAgo.toISOString()),
-      supabase.from('reviews').select('id', { count: 'exact', head: true }).in('order_id', orderIds).lte('rating', 2)
+      supabase.from('reviews').select('rating').eq('cafe_id', cafeId).gte('created_at', sevenDaysAgo.toISOString()),
+      supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('cafe_id', cafeId).lte('rating', 2)
     ]);
 
     if (weekReviews && weekReviews.length > 0) {
@@ -339,8 +339,8 @@ export default async function DashboardPage() {
     const recentOrderIds = recentOrders.map(o => o.id);
     const { data: recentReviews } = await supabase
       .from('reviews')
-      .select('order_id, rating, feedback_text')
-      .in('order_id', recentOrderIds);
+      .select('order_id, rating, feedback_text, rating_label')
+      .eq('cafe_id', cafeId);
 
     const reviewMap = new Map((recentReviews || []).map(r => [r.order_id, r]));
 

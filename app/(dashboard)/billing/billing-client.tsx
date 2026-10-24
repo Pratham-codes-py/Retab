@@ -11,6 +11,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [billSentSuccess, setBillSentSuccess] = useState(false);
 
   const handleSendBill = async () => {
     if (orderItems.length === 0) {
@@ -78,7 +79,8 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
         console.warn('WhatsApp API warning:', whatsappData.error);
         alert('Order saved! WhatsApp delivery failed: ' + (whatsappData.error || 'Unknown error'));
       } else {
-        alert('Order created and WhatsApp bill sent successfully!');
+        setBillSentSuccess(true);
+        setTimeout(() => setBillSentSuccess(false), 2000);
       }
 
       // Clear the form
@@ -310,7 +312,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
               className="h-[52px] w-full bg-primary text-on-primary rounded-xl font-headline-md text-headline-md active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-md hover:opacity-90" 
               style={{ 
                 height: '52px', 
-                background: isSubmitting ? '#a44b38' : '#853423', 
+                background: billSentSuccess ? '#2D5A27' : (isSubmitting ? '#a44b38' : '#853423'), 
                 color: '#ffffff', 
                 borderRadius: '10px', 
                 fontSize: '18px', 
@@ -323,7 +325,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
               }}
             >
               <span className="material-symbols-outlined">{isSubmitting ? 'hourglass_empty' : 'send'}</span>
-              {isSubmitting ? 'Sending...' : 'Send Bill'}
+              {billSentSuccess ? '✓ Bill Sent!' : (isSubmitting ? 'Sending...' : 'Send Bill')}
             </button>
           </div>
         </div>

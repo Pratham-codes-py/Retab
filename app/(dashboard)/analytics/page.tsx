@@ -55,21 +55,20 @@ export default async function AnalyticsPage() {
 
   // Fetch order items and reviews - parallel queries
 
-  if (orderIds.length > 0) {
-    const [orderItemsResult, reviewsResult] = await Promise.all([
-      serviceRoleSupabase
-        .from('order_items')
-        .select('quantity, menu_items(name, price)')
-        .in('order_id', orderIds),
+  // Fetch reviews directly by cafe_id to include WhatsApp reviews
+  const { data: reviewsByCafe } = await serviceRoleSupabase
+    .from('reviews')
+    .select('rating')
+    .eq('cafe_id', cafe.id);
+  queryReviews = reviewsByCafe || [];
 
-      serviceRoleSupabase
-        .from('reviews')
-        .select('rating')
-        .in('order_id', orderIds)
-    ]);
+  if (orderIds.length > 0) {
+    const orderItemsResult = await serviceRoleSupabase
+      .from('order_items')
+      .select('quantity, menu_items(name, price)')
+      .in('order_id', orderIds);
 
     queryOrderItems = orderItemsResult.data || [];
-    queryReviews = reviewsResult.data || [];
   }
 
   // Parallel queries: top regulars + performance aggregations
