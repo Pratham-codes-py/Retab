@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { calculateTotal, formatCurrency, BillLineItem } from '@/lib/calculations/billing';
 import { normalizePhoneNumber } from '@/lib/utils/phone';
 
+import { createClient } from '@/lib/supabase/client';
 export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItems: any[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -12,6 +13,7 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [billSentSuccess, setBillSentSuccess] = useState(false);
+  const supabase = createClient();
 
   const handleSendBill = async () => {
     if (orderItems.length === 0) {
@@ -101,13 +103,18 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
     menuItems.forEach(item => {
       if (item.category) cats.add(item.category);
     });
-    return ['All', ...Array.from(cats)];
+    return ['All', '★ Frequent', ...Array.from(cats)];
   }, [menuItems]);
+
+  const toggleStar = async (id: string, currentStar: boolean) => {
+    const newStar = !currentStar;
+    await supabase.from('menu_items').update({ is_starred: newStar }).eq('id', id);
+  };
 
   // Filtering
   const filteredMenu = useMemo(() => {
     return menuItems.filter(item => {
-      const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
+      const matchesCategory = activeCategory === 'All' ? true : activeCategory === '★ Frequent' ? item.is_starred : item.category === activeCategory;
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
@@ -188,36 +195,32 @@ export default function BillingClient({ cafe, menuItems }: { cafe: any, menuItem
         {/* Compact Item List */}
         <div className="flex-grow overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2" style={{ display: 'grid', gap: '8px' }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {filteredMenu.map(item => (
-              <div 
+              <div
                 key={item.id}
                 onClick={() => addToOrder(item)}
-                className="flex items-center justify-between p-3 bg-surface-container-lowest border border-transparent hover:border-outline-variant hover:bg-surface-container-low rounded-xl cursor-pointer transition-all active:scale-[0.98]" 
-                style={{ padding: '12px 16px', background: '#ffffff', borderRadius: '8px', borderColor: 'transparent', cursor: 'pointer', border: '1px solid #eae7e7' }}
+                className="flex flex-col p-3 bg-white rounded-xl border hover:border-[#dbc1bb] hover:shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                style={{ border: '1px solid #eae7e7' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                  <div style={{
-                    width: '14px',
-                    height: '14px',
-                    border: `1px solid ${item.is_veg !== false ? '#059669' : '#ba1a1a'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '2px',
-                    flexShrink: 0
-                  }}>
-                    <div style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: item.is_veg !== false ? '50%' : '0%',
-                      background: item.is_veg !== false ? '#059669' : '#ba1a1a'
-                    }} />
-                  </div>
-                  <span className="font-headline-md text-headline-md text-on-surface truncate pr-2" style={{ fontSize: '15px', fontWeight: 600 }}>{item.name}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-[15px] truncate" style={{ color: '#1c1b1b' }}>{item.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleStar(item.id, item.is_starred); }}
+                    className="text-xl leading-none ml-2 flex-shrink-0"
+                    style={{ color: item.is_starred ? '#D97706' : '#9ca3af' }}
+                    title="Star / Unstar"
+                  >
+                    {item.is_starred ? '★' : '☆'}
+                  </button>
                 </div>
-                <span className="font-headline-md text-headline-md text-primary flex-shrink-0" style={{ fontSize: '15px', fontWeight: 700, color: '#853423' }}>{formatCurrency(item.price)}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#e5e2e1', color: '#55423e' }}>{item.category}</span>
+                  <span className="font-bold text-[15px]" style={{ color: '#853423' }}>{formatCurrency(item.price)}</span>
+                </div>
               </div>
             ))}
+            </div>
             {filteredMenu.length === 0 && (
               <div className="col-span-full text-center text-on-surface-variant mt-8 opacity-60">No items found.</div>
             )}

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/credits/route.ts
 // Manages credit balance: query balance and log transactions.
 

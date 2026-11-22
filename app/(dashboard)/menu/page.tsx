@@ -25,7 +25,7 @@ export default async function MenuManagementPage() {
 
     supabase
       .from('menu_items')
-      .select('id, name, price, category, is_veg, created_at')
+      .select('id, name, price, category, is_veg, is_starred, created_at')
       .eq('cafe_id', cafeId)
       .order('created_at', { ascending: false })
   ]);
@@ -38,7 +38,8 @@ export default async function MenuManagementPage() {
     name: i.name,
     price: Number(i.price),
     category: i.category || 'Uncategorised',
-    is_veg: i.is_veg !== false
+    is_veg: i.is_veg !== false,
+    is_starred: i.is_starred === true
   }));
 
   const categoriesList = dbCategories || [];

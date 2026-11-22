@@ -104,3 +104,4 @@ export async function GET(request: NextRequest) {
   // TODO: list orders for a cafe with pagination
   return NextResponse.json({ message: 'GET /api/orders — to be implemented' });
 }
+export const dynamic = 'force-dynamic';

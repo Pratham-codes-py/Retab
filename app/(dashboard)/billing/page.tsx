@@ -9,11 +9,11 @@ export default async function BillingPage() {
   const { cafe } = await getActiveCafe();
 
 
-  let menuItems = [];
+  let menuItems: any[] = [];
   if (cafe) {
     const { data } = await supabase
       .from('menu_items')
-      .select('*')
+      .select('id, name, price, category, is_veg, is_starred')
       .eq('cafe_id', cafe.id)
       .order('category', { ascending: true })
       .order('name', { ascending: true });

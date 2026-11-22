@@ -1,32 +1,19 @@
-// app/api/whatsapp/send/route.ts
-// Sends the bill + review-request WhatsApp template to a customer.
-// Deducts one credit per message and logs the send in messages_log.
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { sendBillAndReviewTemplate } from '@/lib/whatsapp/client';
 
 const CREDIT_COST_PER_MESSAGE = 1;
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { cafe_id, customer_id, customer_name, customer_phone, order_id, total_amount } = body as {
-      cafe_id: string;
-      customer_id: string;
-      customer_name?: string;
-      customer_phone: string;
-      order_id: string;
-      total_amount: number;
-    };
-
-    if (!cafe_id || !customer_phone || !order_id || total_amount == null) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+    const { customer_phone, total_amount, customer_name, cafe_id } = body;
 
     const supabase = createServiceRoleClient();
 
-    // 1. Check credit balance
+    // 1. Verify cafe exists and has credits
     const { data: cafe, error: cafeErr } = await supabase
       .from('cafes')
       .select('credit_balance, name, google_review_link')
@@ -42,7 +29,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Send WhatsApp template
-    // Template body already contains "₹{{3}}", so pass the plain number only.
     const billDisplay = String(Math.round(total_amount * 100) / 100).replace(/\.00$/, '');
     await sendBillAndReviewTemplate(
       customer_phone,
@@ -52,21 +38,33 @@ export async function POST(request: NextRequest) {
       customer_name
     );
 
-    // 3. Deduct credits atomically
-    const { error: deductErr } = await supabase.rpc('deduct_credit', {
-      p_cafe_id: cafe_id,
-      p_amount: CREDIT_COST_PER_MESSAGE,
-    });
+    // 3. Deduct exactly 1 credit (with direct fallback)
+    let deductErr: any = null;
+    try {
+      const { error } = await supabase.rpc('decrement_credit', {
+        p_cafe_id: cafe_id,
+        p_amount: 1,
+      });
+      deductErr = error;
+    } catch (rpcErr) {
+      deductErr = rpcErr;
+    }
 
+    // Fallback: direct update if RPC missing/failed (Math.max(0, current-1))
     if (deductErr) {
-      console.error('[whatsapp/send] Credit deduction failed:', deductErr);
-      // Message was sent — log the error but don't fail the request
+      const { data: cafeData } = await supabase
+        .from('cafes')
+        .select('credit_balance')
+        .eq('id', cafe_id)
+        .single();
+      const current = cafeData?.credit_balance ?? 0;
+      await supabase.from('cafes').update({ credit_balance: Math.max(0, current - 1) }).eq('id', cafe_id);
     }
 
     // 4. Log the send in messages_log
     await supabase.from('messages_log').insert({
       cafe_id,
-      customer_id,
+      customer_id: body.customer_id || null,
       type: 'bill',
       channel: 'whatsapp',
       cost: CREDIT_COST_PER_MESSAGE,

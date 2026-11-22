@@ -24,23 +24,31 @@ export default function MenuClient({ cafeId, initialCategories, initialItems }: 
 
   // Active Category Filter
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [starredFilter, setStarredFilter] = useState(false);
 
   // Computed Items
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = activeCategory ? item.category === activeCategory : true;
-      return matchesSearch && matchesCategory;
+      const matchesStarred = starredFilter ? item.is_starred : true;
+      const matchesCategory = activeCategory ? (activeCategory === '★ Frequent' ? item.is_starred : item.category === activeCategory) : true;
+      return matchesSearch && matchesStarred && matchesCategory;
     });
-  }, [items, searchQuery, activeCategory]);
+  }, [items, searchQuery, activeCategory, starredFilter]);
 
   const toggleVeg = async (id: string, currentVeg: boolean) => {
     const newVeg = !currentVeg;
-    // Optimistic update
     setItems(items.map(item => item.id === id ? { ...item, is_veg: newVeg } : item));
-
     if (cafeId) {
       await supabase.from('menu_items').update({ is_veg: newVeg }).eq('id', id);
+    }
+  };
+
+  const toggleStar = async (id: string, currentStar: boolean) => {
+    const newStar = !currentStar;
+    setItems(items.map(item => item.id === id ? { ...item, is_starred: newStar } : item));
+    if (cafeId) {
+      await supabase.from('menu_items').update({ is_starred: newStar }).eq('id', id);
     }
   };
 
@@ -190,17 +198,31 @@ export default function MenuClient({ cafeId, initialCategories, initialItems }: 
           <h3 className="text-[11px] font-bold uppercase tracking-wider ml-1 mb-2" style={{ color: '#55423e' }}>Categories</h3>
           
           <div className="flex flex-col gap-1">
-            <button 
-              onClick={() => setActiveCategory(null)}
+            <button
+              onClick={() => { setActiveCategory(null); setStarredFilter(false); }}
               className="flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors text-[13px] font-bold"
-              style={{ 
-                background: activeCategory === null ? '#eae7e7' : 'transparent',
-                color: activeCategory === null ? '#853423' : '#55423e' 
+              style={{
+                background: activeCategory === null && !starredFilter ? '#eae7e7' : 'transparent',
+                color: activeCategory === null && !starredFilter ? '#853423' : '#55423e'
               }}
             >
               <span>All Items</span>
-              <span className="text-[11px] px-2 rounded-full" style={{ background: activeCategory === null ? '#a44b38' : 'transparent', color: activeCategory === null ? '#ffffff' : '#88726d' }}>
+              <span className="text-[11px] px-2 rounded-full" style={{ background: activeCategory === null && !starredFilter ? '#a44b38' : 'transparent', color: activeCategory === null && !starredFilter ? '#ffffff' : '#88726d' }}>
                 {items.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setActiveCategory('★ Frequent'); setStarredFilter(true); }}
+              className="flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors text-[13px] font-bold"
+              style={{
+                background: activeCategory === '★ Frequent' ? '#eae7e7' : 'transparent',
+                color: activeCategory === '★ Frequent' ? '#853423' : '#55423e'
+              }}
+            >
+              <span>★ Frequent</span>
+              <span className="text-[11px] px-2 rounded-full" style={{ background: activeCategory === '★ Frequent' ? '#a44b38' : 'transparent', color: activeCategory === '★ Frequent' ? '#ffffff' : '#88726d' }}>
+                {items.filter(i => i.is_starred).length}
               </span>
             </button>
 
@@ -302,68 +324,35 @@ export default function MenuClient({ cafeId, initialCategories, initialItems }: 
                 </form>
               )}
 
-              {/* Items List */}
-              {filteredItems.map((item, idx) => (
-                <div key={item.id} className="flex items-center justify-between p-3 hover:bg-[#f6f3f2] transition-colors" style={{ borderBottom: idx < filteredItems.length - 1 ? '1px solid #dbc1bb' : 'none' }}>
-                  <div className="flex items-center gap-4 flex-1">
-                    <div style={{
-                      width: '14px',
-                      height: '14px',
-                      border: `1px solid ${item.is_veg !== false ? '#059669' : '#ba1a1a'}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '2px',
-                      flexShrink: 0
-                    }}>
-                      <div style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: item.is_veg !== false ? '50%' : '0%',
-                        background: item.is_veg !== false ? '#059669' : '#ba1a1a'
-                      }} />
+              {/* Items Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
+                {filteredItems.map((item) => (
+                  <div key={item.id} className="p-3 rounded-xl bg-[#fcf9f8] hover:bg-[#f6f3f2] transition-colors flex flex-col gap-2" style={{ border: '1px solid #dbc1bb' }}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-[15px] font-semibold" style={{ color: '#1c1b1b' }}>{item.name}</h4>
+                        <button
+                          onClick={() => toggleStar(item.id, item.is_starred)}
+                          className="text-xl leading-none"
+                          style={{ color: item.is_starred ? '#D97706' : '#9ca3af' }}
+                          title="Star / Unstar"
+                        >
+                          {item.is_starred ? '★' : '☆'}
+                        </button>
+                      </div>
+                      <p className="text-[16px] font-bold" style={{ color: '#853423' }}>₹{item.price}</p>
                     </div>
-                    <div className="flex flex-col">
-                      <h4 className="text-[15px] font-semibold" style={{ color: '#1c1b1b' }}>{item.name}</h4>
-                      <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-tighter w-fit" style={{ background: '#e5e2e1', color: '#55423e' }}>
-                        {item.category}
-                      </span>
+                    <div className="flex items-center gap-2 text-[12px] font-bold" style={{ color: '#55423e' }}>
+                      <span className="inline-block px-2 py-0.5 rounded-full" style={{ background: '#e5e2e1' }}>{item.category}</span>
+                      <span style={{ color: item.is_veg !== false ? '#059669' : '#ba1a1a' }}>{item.is_veg !== false ? 'Veg' : 'Non-Veg'}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <p className="text-[16px] font-bold w-20 text-right" style={{ color: '#853423' }}>₹{item.price}</p>
-                    
-                    {/* Veg / Non-Veg Toggle Switch */}
-                    <div className="flex items-center min-w-[140px] gap-3">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          className="sr-only peer" 
-                          checked={!item.is_veg}
-                          onChange={() => toggleVeg(item.id, item.is_veg)}
-                        />
-                        <div className="w-8 h-4 rounded-full peer transition-all relative" style={{ background: item.is_veg !== false ? '#059669' : '#ba1a1a' }}>
-                          <div className="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-3 w-3 transition-all" style={{ transform: item.is_veg !== false ? 'translateX(0)' : 'translateX(16px)' }}></div>
-                        </div>
-                      </label>
-                      <span className="text-[12px] font-bold w-20" style={{ color: item.is_veg !== false ? '#059669' : '#ba1a1a' }}>
-                        {item.is_veg !== false ? 'Veg' : 'Non-Veg'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button 
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="w-8 h-8 flex items-center justify-center rounded-full transition-all hover:bg-[#ffdad6]" 
-                        style={{ color: '#55423e' }}
-                        title="Delete Item"
-                      >
-                        <span className="material-symbols-outlined text-[16px] hover:text-[#ba1a1a]">delete</span>
-                      </button>
+                    <div className="flex items-center gap-2 mt-auto pt-2" style={{ borderTop: '1px solid #dbc1bb' }}>
+                      <button onClick={() => toggleVeg(item.id, item.is_veg)} className="text-[12px] font-bold px-2 py-1 rounded" style={{ background: item.is_veg !== false ? '#059669' : '#ba1a1a', color: '#fff' }}>{item.is_veg !== false ? 'Veg' : 'Non-Veg'}</button>
+                      <button onClick={() => handleDeleteItem(item.id)} className="ml-auto text-[12px] font-bold text-[#ba1a1a]">Delete</button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
               {filteredItems.length === 0 && !isAddingItem && (
                 <div className="p-8 text-center text-[14px]" style={{ color: '#55423e' }}>

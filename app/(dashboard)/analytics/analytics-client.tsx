@@ -331,14 +331,9 @@ export default function AnalyticsClient({ initialData }: { initialData?: any }) 
               <span style={{ fontSize: '48px', fontWeight: 800, color: T.onSurface, lineHeight: 1 }}>{averageRating}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  {[1, 2, 3, 4, 5].map(i => {
-                    const starsNum = parseFloat(averageRating);
-                    return (
-                      <span key={i} className="material-symbols-outlined" style={{ fontSize: '20px', color: T.primary, fontVariationSettings: i <= starsNum ? "'FILL' 1" : "'FILL' 0" }}>
-                        {i <= starsNum ? 'star' : i - 0.5 <= starsNum ? 'star_half' : 'star'}
-                      </span>
-                    );
-                  })}
+                  {[1,2,3,4,5].map(i => (
+                    <span key={i} style={{ color: i <= Math.round(parseFloat(averageRating)) ? T.primary : '#e5e7eb', fontSize: '20px' }}>★</span>
+                  ))}
                 </div>
                 <span style={{ fontSize: '12px', color: T.onSurfaceVariant }}>Based on {totalReviews} reviews</span>
               </div>
@@ -360,94 +355,95 @@ export default function AnalyticsClient({ initialData }: { initialData?: any }) 
 
       </div>
 
-      {/* Row 3: Top Regulars Table */}
-      <div className="panel" style={{ padding: '0' }}>
-        <div style={{ padding: '24px', borderBottom: `1px solid ${T.outlineVariant}` }}>
-          <h3 className="panel-title" style={{ margin: 0 }}>Top Regulars</h3>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: T.surfaceContainerLow, borderBottom: `1px solid ${T.outlineVariant}` }}>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer</th>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Visits</th>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Spend</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topRegulars.length === 0 ? (
-                <tr>
-                  <td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: T.onSurfaceVariant, fontStyle: 'italic' }}>
-                    No customer history recorded.
-                  </td>
+      {/* Row 3: Top Regulars + Staff Performance (2-col) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ marginTop: '24px' }}>
+        <div className="panel" style={{ padding: '0' }}>
+          <div style={{ padding: '24px', borderBottom: `1px solid ${T.outlineVariant}` }}>
+            <h3 className="panel-title" style={{ margin: 0 }}>Top Regulars</h3>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: T.surfaceContainerLow, borderBottom: `1px solid ${T.outlineVariant}` }}>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Customer</th>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Visits</th>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Spend</th>
                 </tr>
-              ) : (
-                topRegulars.map((customer: any, i: number) => (
-                  <tr key={customer.id} style={{ borderBottom: i < topRegulars.length - 1 ? `1px solid ${T.surfaceVariant}` : 'none' }}>
-                    <td style={{ padding: '16px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          width: '36px', height: '36px', borderRadius: '50%',
-                          background: '#f5ebe9', color: T.primary,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '13px', fontWeight: 700
-                        }}>
-                          {customer.initials}
+              </thead>
+              <tbody>
+                {topRegulars.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: T.onSurfaceVariant, fontStyle: 'italic' }}>
+                      No customer history recorded.
+                    </td>
+                  </tr>
+                ) : (
+                  topRegulars.map((customer: any, i: number) => (
+                    <tr key={customer.id} style={{ borderBottom: i < topRegulars.length - 1 ? `1px solid ${T.surfaceVariant}` : 'none' }}>
+                      <td style={{ padding: '16px 24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{
+                            width: '36px', height: '36px', borderRadius: '50%',
+                            background: '#f5ebe9', color: T.primary,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '13px', fontWeight: 700
+                          }}>
+                            {customer.initials}
+                          </div>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: T.onSurface }}>{customer.name}</span>
                         </div>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: T.onSurface }}>{customer.name}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 500, color: T.onSurfaceVariant }}>
-                      {customer.visits} visits
-                    </td>
-                    <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 700, color: T.onSurface }}>
-                      {formatCurrency(customer.spend)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 500, color: T.onSurfaceVariant }}>
+                        {customer.visits} visits
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 700, color: T.onSurface }}>
+                        {formatCurrency(customer.spend)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-      {/* Row 4: Staff Performance Table */}
-      <div className="panel" style={{ padding: '0', marginTop: '32px' }}>
-        <div style={{ padding: '24px', borderBottom: `1px solid ${T.outlineVariant}` }}>
-          <h3 className="panel-title" style={{ margin: 0 }}>Staff Performance</h3>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: T.surfaceContainerLow, borderBottom: `1px solid ${T.outlineVariant}` }}>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Staff Member</th>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Orders Completed</th>
-                <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenue Generated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staffPerformance.length === 0 ? (
-                <tr>
-                  <td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: T.onSurfaceVariant, fontStyle: 'italic' }}>
-                    No staff sales performance recorded in this range.
-                  </td>
+        <div className="panel" style={{ padding: '0' }}>
+          <div style={{ padding: '24px', borderBottom: `1px solid ${T.outlineVariant}` }}>
+            <h3 className="panel-title" style={{ margin: 0 }}>Staff Performance</h3>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: T.surfaceContainerLow, borderBottom: `1px solid ${T.outlineVariant}` }}>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Staff Member</th>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Orders Completed</th>
+                  <th style={{ padding: '16px 24px', fontSize: '13px', fontWeight: 600, color: T.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Revenue Generated</th>
                 </tr>
-              ) : (
-                staffPerformance.map((member: any, i: number) => (
-                  <tr key={i} style={{ borderBottom: i < staffPerformance.length - 1 ? `1px solid ${T.surfaceVariant}` : 'none' }}>
-                    <td style={{ padding: '16px 24px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: T.onSurface }}>{member.name}</span>
-                    </td>
-                    <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 500, color: T.onSurfaceVariant }}>
-                      {member.orders} order{member.orders !== 1 ? 's' : ''}
-                    </td>
-                    <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 700, color: T.onSurface }}>
-                      {formatCurrency(member.revenue)}
+              </thead>
+              <tbody>
+                {staffPerformance.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: T.onSurfaceVariant, fontStyle: 'italic' }}>
+                      No staff sales performance recorded in this range.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  staffPerformance.map((member: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: i < staffPerformance.length - 1 ? `1px solid ${T.surfaceVariant}` : 'none' }}>
+                      <td style={{ padding: '16px 24px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: T.onSurface }}>{member.name}</span>
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 500, color: T.onSurfaceVariant }}>
+                        {member.orders} order{member.orders !== 1 ? 's' : ''}
+                      </td>
+                      <td style={{ padding: '16px 24px', fontSize: '14px', fontWeight: 700, color: T.onSurface }}>
+                        {formatCurrency(member.revenue)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

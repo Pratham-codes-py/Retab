@@ -11,11 +11,13 @@
  *  4. Recent Activity feed (table)
  */
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 300; // Cache dashboard for 5 minutes
 
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { createSupabaseServerClient } from '@/lib/supabase/ssr-server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getActiveCafe } from '@/lib/active-cafe';
 import { redirect } from 'next/navigation';
 
@@ -175,9 +177,10 @@ export default async function DashboardPage() {
 
   const cafeId = activeCafe.id;
   const cafeName = activeCafe.name;
-  const creditBalance = activeCafe.credit_balance;
+  const creditBalance = activeCafe.credit_balance ?? 0;
   const rawPlan = activeCafe.plan;
 
+  const serviceSupabase = createServiceRoleClient();
   const supabase = await createSupabaseServerClient();
 
   // ---------------------------------------------------------------------------
@@ -272,21 +275,27 @@ export default async function DashboardPage() {
   let avgRating = 'N/A';
   let negativeReviewsCount = 0;
 
-  if (orderIds.length > 0) {
-    const [
-      { data: weekReviews },
-      { count }
-    ] = await Promise.all([
-      supabase.from('reviews').select('rating').eq('cafe_id', cafeId).gte('created_at', sevenDaysAgo.toISOString()),
-      supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('cafe_id', cafeId).lte('rating', 2)
-    ]);
+  // Avg rating from reviews (last 7 days, fall back to all cafe reviews)
+  const { data: reviewData } = await serviceSupabase
+    .from('reviews')
+    .select('rating, created_at')
+    .eq('cafe_id', cafeId);
 
-    if (weekReviews && weekReviews.length > 0) {
-      const sum = weekReviews.reduce((acc, r) => acc + r.rating, 0);
-      avgRating = (sum / weekReviews.length).toFixed(1);
-    }
-    negativeReviewsCount = count || 0;
+  const last7 = new Date();
+  last7.setDate(last7.getDate() - 7);
+  const windowReviews = (reviewData || []).filter(r => new Date(r.created_at) >= last7);
+  const reviewsToAvg = windowReviews.length > 0 ? windowReviews : (reviewData || []);
+  if (reviewsToAvg.length > 0) {
+    const sum = reviewsToAvg.reduce((acc, r) => acc + (r.rating || 0), 0);
+    avgRating = (sum / reviewsToAvg.length).toFixed(1);
   }
+
+  const { count: negativeCount } = await serviceSupabase
+    .from('reviews')
+    .select('id', { count: 'exact', head: true })
+    .eq('cafe_id', cafeId)
+    .lte('rating', 2);
+  negativeReviewsCount = negativeCount || 0;
 
   // 4. Credits calculation
   const totalCredits = planLimits[rawPlan.toLowerCase()] || 100;
@@ -688,7 +697,7 @@ export default async function DashboardPage() {
             Recent Activity
           </h3>
           <Link
-            href="/billing"
+            href="/customers"
             style={{
               fontSize: '14px',
               fontWeight: 500,

@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import TopUpModal from '@/components/top-up-modal';
 
 // ---------------------------------------------------------------------------
 // Design tokens (Stitch project)
@@ -23,6 +25,7 @@ const T = {
 } as const;
 
 export default function SettingsClient({ initialCafe, initialPayments }: { initialCafe: any; initialPayments?: any[] }) {
+  const router = useRouter();
   const supabase = createClient();
   const [googleLink, setGoogleLink] = useState(initialCafe?.google_review_link || 'https://g.page/r/greenbeans-cafe');
   const [taxPercent, setTaxPercent] = useState(initialCafe?.tax_percent?.toString() || '5');
@@ -30,6 +33,7 @@ export default function SettingsClient({ initialCafe, initialPayments }: { initi
   const [isSavingGoogleLink, setIsSavingGoogleLink] = useState(false);
   const [payments, setPayments] = useState<any[]>(initialPayments || []);
   const [isLoadingPayments, setIsLoadingPayments] = useState(!initialPayments);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   
   const [staff, setStaff] = useState<any[]>([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
@@ -314,7 +318,11 @@ export default function SettingsClient({ initialCafe, initialPayments }: { initi
             <div style={{ flex: 1 }}>
               <div className="info-row">
                 <span style={{ fontSize: '14px', color: T.onSurfaceVariant }}>Connected Number</span>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: T.onSurface }}>+91 98765 43210</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: T.onSurface }}>
+                    {initialCafe?.whatsapp_phone_number_id
+                      ? `WABA ID: ${initialCafe.whatsapp_phone_number_id}`
+                      : 'Not connected'}
+                  </span>
               </div>
               <div className="info-row" style={{ marginBottom: '24px' }}>
                 <span style={{ fontSize: '14px', color: T.onSurfaceVariant }}>Template Status</span>
@@ -344,24 +352,30 @@ export default function SettingsClient({ initialCafe, initialPayments }: { initi
 
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Current Tier</p>
-              <h4 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>Starter Plan</h4>
+              <h4 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '24px', lineHeight: 1.2 }}>
+                {initialCafe?.plan
+                  ? initialCafe.plan.charAt(0).toUpperCase() + initialCafe.plan.slice(1) + ' Plan'
+                  : 'Free Plan'}
+              </h4>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>Monthly Credits</span>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>187 / 250</span>
+                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>Credit Balance</span>
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                  {(initialCafe?.credit_balance ?? 0).toLocaleString('en-IN')} credits
+                </span>
               </div>
-              <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '8px' }}>
-                <div style={{ height: '100%', width: '75%', background: '#ffb4a8', borderRadius: '9999px' }} />
+              <div style={{ height: '6px', background: 'rgba(255,255,255,0.2)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '24px' }}>
+                <div style={{ height: '100%', width: `${Math.min(100, ((initialCafe?.credit_balance ?? 0) / 1500) * 100)}%`, background: '#ffb4a8', borderRadius: '9999px' }} />
               </div>
-              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', textAlign: 'right', marginBottom: '24px' }}>
-                Resetting in 12 days
-              </p>
             </div>
 
-            <button style={{
-              background: '#ffffff', color: '#374151', border: 'none', padding: '12px 16px', borderRadius: '8px',
-              fontSize: '14px', fontWeight: 700, cursor: 'pointer', width: '100%'
-            }}>
+            <button
+              onClick={() => setIsTopUpOpen(true)}
+              style={{
+                background: '#ffffff', color: '#374151', border: 'none', padding: '12px 16px', borderRadius: '8px',
+                fontSize: '14px', fontWeight: 700, cursor: 'pointer', width: '100%'
+              }}
+            >
               Top Up Credits
             </button>
           </div>
@@ -461,7 +475,7 @@ export default function SettingsClient({ initialCafe, initialPayments }: { initi
         </div>
 
         {/* BOTTOM ROW: Staff Login Link & Staff Management */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
           {/* Staff Login Link Section */}
           <div className="panel" style={{ background: T.surfaceContainerLow }}>
@@ -682,6 +696,105 @@ export default function SettingsClient({ initialCafe, initialPayments }: { initi
         </div>
 
       </div>
+
+      {/* Payment History */}
+      <div className="panel" style={{ marginTop: '24px' }}>
+        <div className="panel-header">
+          <div className="icon-box" style={{ background: '#ede9fe', color: '#6d28d9' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>receipt</span>
+          </div>
+          <div>
+            <h3 className="panel-title">Payment History</h3>
+            <p className="panel-subtitle">Last 10 credit top-ups for your account</p>
+          </div>
+        </div>
+
+        {isLoadingPayments ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', color: T.onSurfaceVariant }}>
+            Loading payment history…
+          </div>
+        ) : payments.length === 0 ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', color: T.onSurfaceVariant, fontStyle: 'italic' }}>
+            No payments yet. Top up credits to get started.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${T.outlineVariant}` }}>
+                  {['Date', 'Order ID', 'Amount', 'Credits', 'Status'].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        fontWeight: 600,
+                        color: T.onSurfaceVariant,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p, i) => (
+                  <tr
+                    key={p.id}
+                    style={{
+                      borderBottom:
+                        i < payments.length - 1 ? `1px solid ${T.outlineVariant}` : 'none',
+                      background: i % 2 === 0 ? '#ffffff' : T.surfaceContainerLow,
+                    }}
+                  >
+                    <td style={{ padding: '10px 12px', color: T.onSurfaceVariant, whiteSpace: 'nowrap' }}>
+                      {new Date(p.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: T.onSurface, fontSize: '12px' }}>
+                      {p.cashfree_order_id}
+                    </td>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: T.onSurface, whiteSpace: 'nowrap' }}>
+                      ₹{Number(p.amount).toLocaleString('en-IN')}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: T.onSurface }}>
+                      +{p.credits.toLocaleString('en-IN')}
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 10px',
+                          borderRadius: '9999px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          background: p.status === 'paid' ? '#d1fae5' : '#fef3c7',
+                          color: p.status === 'paid' ? '#065f46' : '#92400e',
+                        }}
+                      >
+                        {p.status === 'paid' ? '✓ Paid' : '⏳ Pending'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Top-Up Modal */}
+      <TopUpModal
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        onSuccess={() => router.refresh()}
+      />
 
       {/* Footer */}
       <footer style={{ marginTop: '48px', paddingTop: '24px', borderTop: `1px solid ${T.surfaceVariant}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
